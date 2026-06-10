@@ -1,5 +1,7 @@
 # Conventus
 
+[Try it here](https://katospiegel-conventus.hf.space/)
+
 An **ephemeral, self-hostable, Slack-like room** you can spin up in seconds and
 throw away just as fast. One Docker container, a single shared password, and a
 warm **solarpunk · Ghibli** design — drop it on a Hugging Face Space (or
