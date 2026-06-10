@@ -184,9 +184,12 @@ pull in a web font:
 .msg-content { font-size: 0.98rem; line-height: 1.7; }
 ```
 
-> Want a starting point? **Settings → Appearance** ships presets — *Forest Dusk,
-> Meadow Day, Golden Hour, Mossy Glen, Sakura, Twilight* — plus a one-click
-> **light / dark** toggle. Custom CSS layers on top of whichever you pick.
+> Want a starting point? **Settings → Appearance** ships presets — *Forest,
+> Golden Hour, Mossy Glen, Sakura, Twilight* — each in a **dark and a light
+> variant**, plus a one-click light / dark toggle. Custom CSS layers on top of
+> whichever you pick, and the full CSS for every preset lives in the
+> [themes folder](https://github.com/caviri/conventus/tree/main/themes) for
+> reference and inspiration.
 
 ---
 

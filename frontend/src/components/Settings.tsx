@@ -27,13 +27,62 @@ import {
   Unlock,
 } from "lucide-react";
 
-const PRESETS: Record<string, string> = {
-  "Forest Dusk": "",
-  "Meadow Day": `:root{--c-bg:#f1ead3;--c-surface:#fcf7e8;--c-surface-2:#f7f0da;--c-elevated:#ece1c1;--c-border:#dccfa6;--c-text:#2f3a27;--c-muted:#6f7c58;--c-accent:#4f9a5b;--c-accent-2:#e3a93f;--c-accent-soft:#4f9a5b26;--c-hover:rgba(58,74,34,0.05);--c-backdrop:radial-gradient(840px 460px at 82% -14%,#ffe3a0cc,transparent 60%),radial-gradient(720px 540px at 6% 114%,#bfe0a9cc,transparent 60%),linear-gradient(180deg,#eef3da,#f1ead3 62%);}`,
-  "Golden Hour": `:root{--c-bg:#241611;--c-surface:#2e1d15;--c-surface-2:#37241a;--c-elevated:#452f22;--c-border:#553a2a;--c-text:#fbeede;--c-muted:#c9a88f;--c-accent:#f29545;--c-accent-2:#e7c14a;--c-accent-soft:#f295452b;--c-hover:rgba(255,220,180,0.05);--c-backdrop:radial-gradient(900px 520px at 80% -10%,#f2954533,transparent 60%),radial-gradient(700px 520px at 10% 112%,#7a3b2233,transparent 60%),linear-gradient(180deg,#2a1812,#1d110c 70%);}`,
-  "Mossy Glen": `:root{--c-bg:#0f1c16;--c-surface:#14241b;--c-surface-2:#182b20;--c-elevated:#1f3a2b;--c-border:#294d38;--c-text:#e6f2e6;--c-muted:#92ad97;--c-accent:#73c08a;--c-accent-2:#bfe07a;--c-accent-soft:#73c08a2b;--c-hover:rgba(220,255,220,0.04);--c-backdrop:radial-gradient(820px 480px at 82% -8%,#73c08a26,transparent 60%),radial-gradient(760px 560px at 8% 112%,#3a7a5326,transparent 60%),linear-gradient(180deg,#12211a,#0d1812 70%);}`,
-  Sakura: `:root{--c-bg:#f6e9ec;--c-surface:#fdf4f6;--c-surface-2:#f9eef1;--c-elevated:#f1dde3;--c-border:#e8cdd6;--c-text:#3f2e34;--c-muted:#8a6f78;--c-accent:#e57aa0;--c-accent-2:#8cbf7a;--c-accent-soft:#e57aa026;--c-hover:rgba(80,40,55,0.04);--c-backdrop:radial-gradient(840px 460px at 82% -14%,#ffd6e3cc,transparent 60%),radial-gradient(720px 540px at 6% 114%,#cfe7bccc,transparent 60%),linear-gradient(180deg,#fbeef1,#f6e9ec 62%);}`,
-  Twilight: `:root{--c-bg:#161427;--c-surface:#1d1b33;--c-surface-2:#23203d;--c-elevated:#2c294b;--c-border:#3a3660;--c-text:#ece9f7;--c-muted:#a59fc4;--c-accent:#e8b24a;--c-accent-2:#9a7bd6;--c-accent-soft:#e8b24a2b;--c-hover:rgba(230,225,255,0.04);--c-backdrop:radial-gradient(880px 520px at 82% -10%,#e8b24a26,transparent 60%),radial-gradient(760px 560px at 8% 112%,#6d4fb033,transparent 60%),linear-gradient(180deg,#1a1730,#12101f 70%);}`,
+// Every preset ships a dark and a light variant. The same palettes live as
+// readable CSS files in the repo's themes/ folder.
+const THEMES_URL = "https://github.com/caviri/conventus/tree/main/themes";
+
+type PresetVariant = { label: string; css: string };
+const PRESETS: Record<string, { dark: PresetVariant; light: PresetVariant }> = {
+  Forest: {
+    dark: {
+      label: "Forest Dusk",
+      css: `:root{--c-bg:#14211a;--c-surface:#1a2a20;--c-surface-2:#1f3226;--c-elevated:#284130;--c-border:#335041;--c-text:#eef4e6;--c-muted:#a6b9a0;--c-accent:#e8b24a;--c-accent-2:#6fb98a;--c-accent-soft:#e8b24a2b;--c-hover:rgba(255,244,214,0.05);--c-backdrop:radial-gradient(820px 480px at 84% -10%,#e8b24a26,transparent 62%),radial-gradient(760px 560px at 10% 112%,#3f9c6a2e,transparent 60%),linear-gradient(180deg,#182a1f,#111c15 70%);}`,
+    },
+    light: {
+      label: "Meadow Day",
+      css: `:root{--c-bg:#f1ead3;--c-surface:#fcf7e8;--c-surface-2:#f7f0da;--c-elevated:#ece1c1;--c-border:#dccfa6;--c-text:#2f3a27;--c-muted:#6f7c58;--c-accent:#4f9a5b;--c-accent-2:#e3a93f;--c-accent-soft:#4f9a5b26;--c-hover:rgba(58,74,34,0.05);--c-backdrop:radial-gradient(840px 460px at 82% -14%,#ffe3a0cc,transparent 60%),radial-gradient(720px 540px at 6% 114%,#bfe0a9cc,transparent 60%),linear-gradient(180deg,#eef3da,#f1ead3 62%);}`,
+    },
+  },
+  "Golden Hour": {
+    dark: {
+      label: "Golden Hour",
+      css: `:root{--c-bg:#241611;--c-surface:#2e1d15;--c-surface-2:#37241a;--c-elevated:#452f22;--c-border:#553a2a;--c-text:#fbeede;--c-muted:#c9a88f;--c-accent:#f29545;--c-accent-2:#e7c14a;--c-accent-soft:#f295452b;--c-hover:rgba(255,220,180,0.05);--c-backdrop:radial-gradient(900px 520px at 80% -10%,#f2954533,transparent 60%),radial-gradient(700px 520px at 10% 112%,#7a3b2233,transparent 60%),linear-gradient(180deg,#2a1812,#1d110c 70%);}`,
+    },
+    light: {
+      label: "Golden Morning",
+      css: `:root{--c-bg:#f8ecdc;--c-surface:#fdf6ea;--c-surface-2:#faf0df;--c-elevated:#f2e2c6;--c-border:#e6cfa6;--c-text:#46301d;--c-muted:#94714e;--c-accent:#d97b2f;--c-accent-2:#d9a93f;--c-accent-soft:#d97b2f26;--c-hover:rgba(120,70,20,0.05);--c-backdrop:radial-gradient(840px 460px at 82% -14%,#ffd9a3cc,transparent 60%),radial-gradient(720px 540px at 6% 114%,#f5c98ccc,transparent 60%),linear-gradient(180deg,#fbf0dd,#f8ecdc 62%);}`,
+    },
+  },
+  "Mossy Glen": {
+    dark: {
+      label: "Mossy Glen",
+      css: `:root{--c-bg:#0f1c16;--c-surface:#14241b;--c-surface-2:#182b20;--c-elevated:#1f3a2b;--c-border:#294d38;--c-text:#e6f2e6;--c-muted:#92ad97;--c-accent:#73c08a;--c-accent-2:#bfe07a;--c-accent-soft:#73c08a2b;--c-hover:rgba(220,255,220,0.04);--c-backdrop:radial-gradient(820px 480px at 82% -8%,#73c08a26,transparent 60%),radial-gradient(760px 560px at 8% 112%,#3a7a5326,transparent 60%),linear-gradient(180deg,#12211a,#0d1812 70%);}`,
+    },
+    light: {
+      label: "Misty Glen",
+      css: `:root{--c-bg:#e7efe2;--c-surface:#f4f9f0;--c-surface-2:#edf4e7;--c-elevated:#dce8d2;--c-border:#c3d6b6;--c-text:#283827;--c-muted:#657a5e;--c-accent:#3f8e5d;--c-accent-2:#7fae3d;--c-accent-soft:#3f8e5d26;--c-hover:rgba(40,70,40,0.05);--c-backdrop:radial-gradient(840px 460px at 82% -14%,#cfe8bbcc,transparent 60%),radial-gradient(720px 540px at 6% 114%,#a9d4b3cc,transparent 60%),linear-gradient(180deg,#edf4e4,#e7efe2 62%);}`,
+    },
+  },
+  Sakura: {
+    dark: {
+      label: "Sakura Night",
+      css: `:root{--c-bg:#241622;--c-surface:#2d1c2a;--c-surface-2:#352232;--c-elevated:#422c3e;--c-border:#543a4e;--c-text:#f6e9f0;--c-muted:#bb95a9;--c-accent:#e57aa0;--c-accent-2:#8cbf7a;--c-accent-soft:#e57aa02b;--c-hover:rgba(255,215,235,0.05);--c-backdrop:radial-gradient(880px 520px at 82% -10%,#e57aa026,transparent 60%),radial-gradient(760px 560px at 8% 112%,#6d3b5733,transparent 60%),linear-gradient(180deg,#2a1827,#1c1019 70%);}`,
+    },
+    light: {
+      label: "Sakura Day",
+      css: `:root{--c-bg:#f6e9ec;--c-surface:#fdf4f6;--c-surface-2:#f9eef1;--c-elevated:#f1dde3;--c-border:#e8cdd6;--c-text:#3f2e34;--c-muted:#8a6f78;--c-accent:#e57aa0;--c-accent-2:#8cbf7a;--c-accent-soft:#e57aa026;--c-hover:rgba(80,40,55,0.04);--c-backdrop:radial-gradient(840px 460px at 82% -14%,#ffd6e3cc,transparent 60%),radial-gradient(720px 540px at 6% 114%,#cfe7bccc,transparent 60%),linear-gradient(180deg,#fbeef1,#f6e9ec 62%);}`,
+    },
+  },
+  Twilight: {
+    dark: {
+      label: "Twilight",
+      css: `:root{--c-bg:#161427;--c-surface:#1d1b33;--c-surface-2:#23203d;--c-elevated:#2c294b;--c-border:#3a3660;--c-text:#ece9f7;--c-muted:#a59fc4;--c-accent:#e8b24a;--c-accent-2:#9a7bd6;--c-accent-soft:#e8b24a2b;--c-hover:rgba(230,225,255,0.04);--c-backdrop:radial-gradient(880px 520px at 82% -10%,#e8b24a26,transparent 60%),radial-gradient(760px 560px at 8% 112%,#6d4fb033,transparent 60%),linear-gradient(180deg,#1a1730,#12101f 70%);}`,
+    },
+    light: {
+      label: "Lavender Day",
+      css: `:root{--c-bg:#edeaf6;--c-surface:#f8f6fc;--c-surface-2:#f2eff9;--c-elevated:#e3ddf1;--c-border:#d0c7e6;--c-text:#332c49;--c-muted:#6f6890;--c-accent:#7a5fc8;--c-accent-2:#d9a23f;--c-accent-soft:#7a5fc826;--c-hover:rgba(60,45,110,0.05);--c-backdrop:radial-gradient(840px 460px at 82% -14%,#d8c9f5cc,transparent 60%),radial-gradient(720px 540px at 6% 114%,#f5dfa9cc,transparent 60%),linear-gradient(180deg,#f1edf9,#edeaf6 62%);}`,
+    },
+  },
 };
 
 export default function Settings() {
@@ -334,17 +383,49 @@ export default function Settings() {
               target any element.
             </p>
 
-            <div className="mb-3 flex flex-wrap gap-2">
-              {Object.entries(PRESETS).map(([name, value]) => (
-                <button
+            <div className="mb-2 flex flex-wrap gap-2">
+              {Object.entries(PRESETS).map(([name, variants]) => (
+                <div
                   key={name}
-                  className="btn !py-1.5 text-xs"
-                  onClick={() => onChange(value)}
+                  className="flex items-stretch overflow-hidden rounded-full border border-[var(--c-border)] bg-[var(--c-surface-2)]"
                 >
-                  {name}
-                </button>
+                  <span className="px-2.5 py-1.5 text-xs font-medium">
+                    {name}
+                  </span>
+                  <button
+                    className="border-l border-[var(--c-border)] px-2 text-[var(--c-muted)] transition-colors hover:bg-[var(--c-hover)] hover:text-[var(--c-text)]"
+                    title={`${variants.dark.label} (dark)`}
+                    aria-label={`${variants.dark.label} (dark)`}
+                    onClick={() => onChange(variants.dark.css)}
+                  >
+                    <Moon size={13} />
+                  </button>
+                  <button
+                    className="border-l border-[var(--c-border)] px-2 text-[var(--c-muted)] transition-colors hover:bg-[var(--c-hover)] hover:text-[var(--c-text)]"
+                    title={`${variants.light.label} (light)`}
+                    aria-label={`${variants.light.label} (light)`}
+                    onClick={() => onChange(variants.light.css)}
+                  >
+                    <Sun size={13} />
+                  </button>
+                </div>
               ))}
             </div>
+
+            <p className="mb-3 text-xs text-[var(--c-muted)]">
+              Each preset comes in a dark (<Moon size={11} className="inline" />)
+              and a light (<Sun size={11} className="inline" />) variant. The
+              full CSS for every theme lives in the{" "}
+              <a
+                href={THEMES_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[var(--c-accent)] underline"
+              >
+                themes folder on GitHub
+              </a>{" "}
+              — copy one as a starting point for your own look.
+            </p>
 
             <textarea
               value={css}

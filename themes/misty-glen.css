@@ -1,0 +1,18 @@
+/* Misty Glen — light.
+ * Morning mist over moss: pale greens and dew. Pairs with mossy-glen.css. */
+:root {
+  --c-bg: #e7efe2;
+  --c-surface: #f4f9f0;
+  --c-surface-2: #edf4e7;
+  --c-elevated: #dce8d2;
+  --c-border: #c3d6b6;
+  --c-text: #283827;
+  --c-muted: #657a5e;
+  --c-accent: #3f8e5d;
+  --c-accent-2: #7fae3d;
+  --c-accent-soft: #3f8e5d26;
+  --c-hover: rgba(40, 70, 40, 0.05);
+  --c-backdrop: radial-gradient(840px 460px at 82% -14%, #cfe8bbcc, transparent 60%),
+    radial-gradient(720px 540px at 6% 114%, #a9d4b3cc, transparent 60%),
+    linear-gradient(180deg, #edf4e4, #e7efe2 62%);
+}

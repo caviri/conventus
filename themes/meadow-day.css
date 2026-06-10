@@ -1,0 +1,18 @@
+/* Meadow Day — the default light theme.
+ * Cream parchment, sage panels, leaf-green light. Pairs with forest-dusk.css. */
+:root {
+  --c-bg: #f1ead3;
+  --c-surface: #fcf7e8;
+  --c-surface-2: #f7f0da;
+  --c-elevated: #ece1c1;
+  --c-border: #dccfa6;
+  --c-text: #2f3a27;
+  --c-muted: #6f7c58;
+  --c-accent: #4f9a5b;
+  --c-accent-2: #e3a93f;
+  --c-accent-soft: #4f9a5b26;
+  --c-hover: rgba(58, 74, 34, 0.05);
+  --c-backdrop: radial-gradient(840px 460px at 82% -14%, #ffe3a0cc, transparent 60%),
+    radial-gradient(720px 540px at 6% 114%, #bfe0a9cc, transparent 60%),
+    linear-gradient(180deg, #eef3da, #f1ead3 62%);
+}

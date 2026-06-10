@@ -1,0 +1,18 @@
+/* Sakura Day — light.
+ * Soft pastel petals: blush pink with fresh leaf green. Pairs with sakura-night.css. */
+:root {
+  --c-bg: #f6e9ec;
+  --c-surface: #fdf4f6;
+  --c-surface-2: #f9eef1;
+  --c-elevated: #f1dde3;
+  --c-border: #e8cdd6;
+  --c-text: #3f2e34;
+  --c-muted: #8a6f78;
+  --c-accent: #e57aa0;
+  --c-accent-2: #8cbf7a;
+  --c-accent-soft: #e57aa026;
+  --c-hover: rgba(80, 40, 55, 0.04);
+  --c-backdrop: radial-gradient(840px 460px at 82% -14%, #ffd6e3cc, transparent 60%),
+    radial-gradient(720px 540px at 6% 114%, #cfe7bccc, transparent 60%),
+    linear-gradient(180deg, #fbeef1, #f6e9ec 62%);
+}

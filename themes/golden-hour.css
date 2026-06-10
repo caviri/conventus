@@ -1,0 +1,18 @@
+/* Golden Hour — dark.
+ * Sunset embers: deep umber lit by apricot and gold. Pairs with golden-morning.css. */
+:root {
+  --c-bg: #241611;
+  --c-surface: #2e1d15;
+  --c-surface-2: #37241a;
+  --c-elevated: #452f22;
+  --c-border: #553a2a;
+  --c-text: #fbeede;
+  --c-muted: #c9a88f;
+  --c-accent: #f29545;
+  --c-accent-2: #e7c14a;
+  --c-accent-soft: #f295452b;
+  --c-hover: rgba(255, 220, 180, 0.05);
+  --c-backdrop: radial-gradient(900px 520px at 80% -10%, #f2954533, transparent 60%),
+    radial-gradient(700px 520px at 10% 112%, #7a3b2233, transparent 60%),
+    linear-gradient(180deg, #2a1812, #1d110c 70%);
+}

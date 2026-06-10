@@ -47,8 +47,10 @@ Storybook serif (**Fraunces**) for the brand/headings, rounded **Nunito** body,
 generous radius, pill buttons with a duotone accent gradient, soft warm shadows,
 an illustrated login scene and empty states.
 
-Built-in presets: *Forest Dusk, Meadow Day, Golden Hour, Mossy Glen, Sakura,
-Twilight*.
+Built-in presets — each as a **dark / light pair**: *Forest* (Forest Dusk /
+Meadow Day), *Golden Hour* (/ Golden Morning), *Mossy Glen* (/ Misty Glen),
+*Sakura* (Sakura Night / Sakura Day), and *Twilight* (/ Lavender Day). The full
+CSS for every variant lives as readable files in [`themes/`](themes/).
 
 ## Alternative directions
 

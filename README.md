@@ -1,6 +1,14 @@
 # Conventus
 
-[Try it here](https://katospiegel-conventus.hf.space/)
+<p align="center">
+  <a href="https://katospiegel-conventus.hf.space/">
+    <img src="https://huggingface.co/datasets/huggingface/badges/resolve/main/open-in-hf-spaces-xl-dark.svg" alt="Try Conventus live on Hugging Face Spaces">
+  </a>
+</p>
+
+<p align="center">
+  <b>Try it here</b> — pick a name, enter the room password <code>hello:)</code>, and say hello 👋
+</p>
 
 An **ephemeral, self-hostable, Slack-like room** you can spin up in seconds and
 throw away just as fast. One Docker container, a single shared password, and a

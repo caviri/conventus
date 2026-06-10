@@ -1,0 +1,18 @@
+/* Sakura Night — dark.
+ * Blossoms after dark: plum dusk with lantern-pink accents. Pairs with sakura-day.css. */
+:root {
+  --c-bg: #241622;
+  --c-surface: #2d1c2a;
+  --c-surface-2: #352232;
+  --c-elevated: #422c3e;
+  --c-border: #543a4e;
+  --c-text: #f6e9f0;
+  --c-muted: #bb95a9;
+  --c-accent: #e57aa0;
+  --c-accent-2: #8cbf7a;
+  --c-accent-soft: #e57aa02b;
+  --c-hover: rgba(255, 215, 235, 0.05);
+  --c-backdrop: radial-gradient(880px 520px at 82% -10%, #e57aa026, transparent 60%),
+    radial-gradient(760px 560px at 8% 112%, #6d3b5733, transparent 60%),
+    linear-gradient(180deg, #2a1827, #1c1019 70%);
+}

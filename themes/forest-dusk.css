@@ -1,0 +1,18 @@
+/* Forest Dusk — the default dark theme.
+ * Warm dark greens lit by lantern gold. Pairs with meadow-day.css. */
+:root {
+  --c-bg: #14211a;
+  --c-surface: #1a2a20;
+  --c-surface-2: #1f3226;
+  --c-elevated: #284130;
+  --c-border: #335041;
+  --c-text: #eef4e6;
+  --c-muted: #a6b9a0;
+  --c-accent: #e8b24a;
+  --c-accent-2: #6fb98a;
+  --c-accent-soft: #e8b24a2b;
+  --c-hover: rgba(255, 244, 214, 0.05);
+  --c-backdrop: radial-gradient(820px 480px at 84% -10%, #e8b24a26, transparent 62%),
+    radial-gradient(760px 560px at 10% 112%, #3f9c6a2e, transparent 60%),
+    linear-gradient(180deg, #182a1f, #111c15 70%);
+}

@@ -1,0 +1,18 @@
+/* Twilight — dark.
+ * Indigo night with firefly gold and violet. Pairs with lavender-day.css. */
+:root {
+  --c-bg: #161427;
+  --c-surface: #1d1b33;
+  --c-surface-2: #23203d;
+  --c-elevated: #2c294b;
+  --c-border: #3a3660;
+  --c-text: #ece9f7;
+  --c-muted: #a59fc4;
+  --c-accent: #e8b24a;
+  --c-accent-2: #9a7bd6;
+  --c-accent-soft: #e8b24a2b;
+  --c-hover: rgba(230, 225, 255, 0.04);
+  --c-backdrop: radial-gradient(880px 520px at 82% -10%, #e8b24a26, transparent 60%),
+    radial-gradient(760px 560px at 8% 112%, #6d4fb033, transparent 60%),
+    linear-gradient(180deg, #1a1730, #12101f 70%);
+}

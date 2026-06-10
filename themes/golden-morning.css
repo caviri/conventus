@@ -1,0 +1,18 @@
+/* Golden Morning — light.
+ * First light on warm cream, peach haze, burnt-orange accents. Pairs with golden-hour.css. */
+:root {
+  --c-bg: #f8ecdc;
+  --c-surface: #fdf6ea;
+  --c-surface-2: #faf0df;
+  --c-elevated: #f2e2c6;
+  --c-border: #e6cfa6;
+  --c-text: #46301d;
+  --c-muted: #94714e;
+  --c-accent: #d97b2f;
+  --c-accent-2: #d9a93f;
+  --c-accent-soft: #d97b2f26;
+  --c-hover: rgba(120, 70, 20, 0.05);
+  --c-backdrop: radial-gradient(840px 460px at 82% -14%, #ffd9a3cc, transparent 60%),
+    radial-gradient(720px 540px at 6% 114%, #f5c98ccc, transparent 60%),
+    linear-gradient(180deg, #fbf0dd, #f8ecdc 62%);
+}

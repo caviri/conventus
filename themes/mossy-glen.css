@@ -1,0 +1,18 @@
+/* Mossy Glen — dark.
+ * Deep forest floor: near-black greens with soft moss light. Pairs with misty-glen.css. */
+:root {
+  --c-bg: #0f1c16;
+  --c-surface: #14241b;
+  --c-surface-2: #182b20;
+  --c-elevated: #1f3a2b;
+  --c-border: #294d38;
+  --c-text: #e6f2e6;
+  --c-muted: #92ad97;
+  --c-accent: #73c08a;
+  --c-accent-2: #bfe07a;
+  --c-accent-soft: #73c08a2b;
+  --c-hover: rgba(220, 255, 220, 0.04);
+  --c-backdrop: radial-gradient(820px 480px at 82% -8%, #73c08a26, transparent 60%),
+    radial-gradient(760px 560px at 8% 112%, #3a7a5326, transparent 60%),
+    linear-gradient(180deg, #12211a, #0d1812 70%);
+}

@@ -1,0 +1,18 @@
+/* Lavender Day — light.
+ * Twilight's daytime twin: soft lavender fields with violet and gold. Pairs with twilight.css. */
+:root {
+  --c-bg: #edeaf6;
+  --c-surface: #f8f6fc;
+  --c-surface-2: #f2eff9;
+  --c-elevated: #e3ddf1;
+  --c-border: #d0c7e6;
+  --c-text: #332c49;
+  --c-muted: #6f6890;
+  --c-accent: #7a5fc8;
+  --c-accent-2: #d9a23f;
+  --c-accent-soft: #7a5fc826;
+  --c-hover: rgba(60, 45, 110, 0.05);
+  --c-backdrop: radial-gradient(840px 460px at 82% -14%, #d8c9f5cc, transparent 60%),
+    radial-gradient(720px 540px at 6% 114%, #f5dfa9cc, transparent 60%),
+    linear-gradient(180deg, #f1edf9, #edeaf6 62%);
+}
