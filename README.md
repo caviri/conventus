@@ -34,7 +34,7 @@ delete it.
 ## Features
 
 **Chat**
-- 🔑 **One room password.** People pick a name (or claim a reserved one) and they're in. No accounts, no email, no secrets.
+- 🔑 **One name + one password.** People pick a name and enter the room password, admin password, or a reserved-name password. No accounts, no email.
 - 💬 **Channels + DMs** in realtime over WebSockets, with presence and typing indicators.
 - ✍️ **Rich messages** — edit, delete, **emoji reactions**, **quote-replies**, **pinned messages**, **permalinks**, and `/slash` commands (`/me`, `/shrug`, `/poll`, `/dm`, `/theme`, `/topic`, `/help`, …) with an autocomplete palette.
 - 🔎 **Message search** across channels and your DMs (⌘/Ctrl-K), and date dividers.

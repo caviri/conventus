@@ -2,19 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { useStore } from "../store";
 import type { User } from "../types";
-import { ChevronDown, KeyRound, MessagesSquare } from "lucide-react";
+import { MessagesSquare } from "lucide-react";
 
 export default function Login() {
   const roomName = useStore((s) => s.roomName);
   const login = useStore((s) => s.login);
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [namePassword, setNamePassword] = useState("");
-  const [adminPassword, setAdminPassword] = useState("");
-  const [advanced, setAdvanced] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const namePasswordRef = useRef<HTMLInputElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem("conventus.name");
@@ -24,25 +22,27 @@ export default function Login() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    const displayName = name.trim();
+    if (!displayName) {
+      setError("Enter the display name you want to use in the room.");
+      requestAnimationFrame(() => nameRef.current?.focus());
+      return;
+    }
+    if (!password) {
+      setError("Enter the password to join.");
+      requestAnimationFrame(() => passwordRef.current?.focus());
+      return;
+    }
     setBusy(true);
     try {
       const res = await api.post<{ token: string; user: User }>("/api/auth/login", {
         password,
-        name: name.trim(),
-        name_password: namePassword || undefined,
-        admin_password: adminPassword || undefined,
+        name: displayName,
       });
       localStorage.setItem("conventus.name", res.user.name);
       await login(res.token, res.user);
     } catch (err: any) {
-      const message = err.message || "Login failed";
-      if (message.toLowerCase().includes("reserved")) {
-        setAdvanced(true);
-        setError("That name is reserved. Enter its name password below.");
-        requestAnimationFrame(() => namePasswordRef.current?.focus());
-      } else {
-        setError(message);
-      }
+      setError(err.message || "Login failed");
     } finally {
       setBusy(false);
     }
@@ -53,6 +53,7 @@ export default function Login() {
       <LoginScene />
       <form
         onSubmit={submit}
+        noValidate
         className="card fade-in relative z-10 w-full p-5 sm:p-7"
         style={{ maxWidth: "min(24rem, calc(100vw - 2rem))" }}
       >
@@ -65,101 +66,35 @@ export default function Login() {
           </div>
           <h1 className="font-display text-2xl font-semibold">{roomName}</h1>
           <p className="mt-1 text-sm text-[var(--c-muted)]">
-            Room password first, your name after.
+            Enter your name and password to join.
           </p>
         </div>
 
         <label className="mb-1 block text-xs font-medium text-[var(--c-muted)]">
-          Display name
+          Name
         </label>
         <input
+          ref={nameRef}
           className="input mb-3"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. ada"
           autoComplete="nickname"
           autoFocus
-          required
         />
 
         <label className="mb-1 block text-xs font-medium text-[var(--c-muted)]">
-          Room password
+          Password
         </label>
         <input
+          ref={passwordRef}
           className="input mb-3"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          placeholder="Room password"
+          placeholder="Room, admin, or reserved password"
           autoComplete="current-password"
-          required
         />
-
-        <div className="mb-3 overflow-hidden rounded-2xl border border-[var(--c-border)] bg-[color-mix(in_srgb,var(--c-bg)_62%,transparent)]">
-          <button
-            type="button"
-            className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition hover:bg-[var(--c-hover)]"
-            onClick={() => setAdvanced((v) => !v)}
-            aria-expanded={advanced}
-            aria-controls="login-extra-credentials"
-          >
-            <span className="flex min-w-0 items-center gap-2.5">
-              <span
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-xl"
-                style={{ background: "var(--c-accent-soft)", color: "var(--c-accent)" }}
-              >
-                <KeyRound size={16} />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold leading-tight">
-                  Reserved name or admin?
-                </span>
-                <span className="block truncate text-xs text-[var(--c-muted)]">
-                  Add an optional extra password.
-                </span>
-              </span>
-            </span>
-            <ChevronDown
-              size={16}
-              className={`shrink-0 text-[var(--c-muted)] transition ${advanced ? "rotate-180" : ""}`}
-            />
-          </button>
-
-          <div
-            id="login-extra-credentials"
-            className={`${advanced ? "block" : "hidden"} fade-in border-t border-[var(--c-border)] p-3`}
-          >
-            <div className="space-y-3">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-[var(--c-muted)]">
-                  Reserved-name password
-                </label>
-                <input
-                  ref={namePasswordRef}
-                  className="input"
-                  type="password"
-                  value={namePassword}
-                  onChange={(e) => setNamePassword(e.target.value)}
-                  placeholder="Only for protected names"
-                  autoComplete="current-password"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-[var(--c-muted)]">
-                  Admin password
-                </label>
-                <input
-                  className="input"
-                  type="password"
-                  value={adminPassword}
-                  onChange={(e) => setAdminPassword(e.target.value)}
-                  placeholder="Optional"
-                  autoComplete="current-password"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
 
         {error && (
           <p className="mb-3 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">

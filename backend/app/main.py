@@ -43,13 +43,14 @@ messages, run bots, upload files, manage the room, and more.
 Every endpoint except `GET /api/health`, `GET /api/auth/config`,
 `POST /api/auth/login` and `GET /api/push/config` requires a **bearer token**.
 
-1. `POST /api/auth/login` with the room password (and a name) returns a token.
-   Pass `admin_password` too for an admin token.
+1. `POST /api/auth/login` with a name and password returns a token. The same
+   password field accepts the room password, the admin password, or a
+   reserved-name password.
 2. Send it on every request as `Authorization: Bearer <token>`.
 
 The same token powers scripts, bots and scheduled posts. **Admin-only**
 endpoints (bot management, name reservation, export/import, board/channel
-deletion) require a token minted with the admin password.
+deletion) require a token minted by logging in with the admin password.
 
 ### Realtime
 

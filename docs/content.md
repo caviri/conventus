@@ -23,7 +23,8 @@ container and it's gone.
 
 - **Single container.** FastAPI serves a React SPA, talks WebSockets, and stores
   everything in SQLite + files on disk. Nothing external to run.
-- **One room password** to enter; one admin password for management.
+- **One name + one password** to enter. The password can be the room password,
+  the admin password, or a reserved-name password.
 - **Ephemeral by design** — snapshot to a zip and rehydrate later if you want.
 
 ---
@@ -323,8 +324,8 @@ curl $URL/api/channels/1/messages -X POST \
   -d '{"content":"Hello from the API 🚀"}'
 ```
 
-Pass `"admin_password"` to `login` for an **admin** token (required by the
-admin-only endpoints marked 🔒).
+Use the admin password in the same `"password"` field to get an **admin** token
+(required by the admin-only endpoints marked 🔒).
 
 ### Endpoints
 
@@ -332,7 +333,7 @@ admin-only endpoints marked 🔒).
 
 | Method & path           | Body / notes                                   |
 | ----------------------- | ---------------------------------------------- |
-| `POST /api/auth/login`  | `{password, name, name_password?, admin_password?}` → `{token, user}` |
+| `POST /api/auth/login`  | `{password, name}` → `{token, user}`. Password may be room, admin, or reserved-name password. |
 | `GET  /api/auth/me`     | Current user                                   |
 | `GET  /api/auth/config` | Public: room name + version (no auth)          |
 

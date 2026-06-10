@@ -33,34 +33,36 @@ def color_for(name: str) -> str:
 
 
 class LoginRequest(BaseModel):
-    password: str
+    password: str = Field(min_length=1)
     name: str = Field(min_length=1, max_length=32)
-    name_password: str | None = None
-    admin_password: str | None = None
 
 
 @router.post("/login")
 async def login(req: LoginRequest):
-    if not security.constant_time_equals(req.password, config.ROOM_PASSWORD):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Wrong room password"
-        )
-
     name = req.name.strip()
     if not NAME_RE.match(name):
         raise HTTPException(status_code=400, detail="Invalid name")
 
-    is_admin = False
-    if req.admin_password:
-        if not security.constant_time_equals(req.admin_password, config.ADMIN_PASSWORD):
-            raise HTTPException(status_code=401, detail="Wrong admin password")
-        is_admin = True
+    room_ok = security.constant_time_equals(req.password, config.ROOM_PASSWORD)
+    is_admin = security.constant_time_equals(req.password, config.ADMIN_PASSWORD)
 
     user = db.query_one("SELECT * FROM users WHERE name = ?", (name,))
+    reserved_ok = bool(
+        user
+        and user["reserved"]
+        and user["password_hash"]
+        and security.verify_password(req.password, user["password_hash"])
+    )
+
+    if not (room_ok or is_admin or reserved_ok):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Wrong password"
+        )
+
     if user:
         # A reserved name requires its own password.
         if user["reserved"] and user["password_hash"]:
-            if not security.verify_password(req.name_password or "", user["password_hash"]):
+            if not (reserved_ok or is_admin):
                 raise HTTPException(
                     status_code=401, detail="This name is reserved — wrong password"
                 )
@@ -70,20 +72,16 @@ async def login(req: LoginRequest):
         is_admin = is_admin or bool(user["is_admin"])
         color = user["color"]
     else:
-        # New name. If a password is supplied, the person reserves it for later.
-        password_hash = (
-            security.hash_password(req.name_password) if req.name_password else None
-        )
         color = color_for(name)
         db.execute(
             "INSERT INTO users(name, password_hash, is_admin, color, reserved, "
             "created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
                 name,
-                password_hash,
+                None,
                 1 if is_admin else 0,
                 color,
-                1 if password_hash else 0,
+                0,
                 db.now(),
                 db.now(),
             ),
