@@ -1,0 +1,19 @@
+{
+  "name": "Conventus",
+  "short_name": "Conventus",
+  "description": "An ephemeral, self-hostable, Slack-like room.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#14211a",
+  "theme_color": "#14211a",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

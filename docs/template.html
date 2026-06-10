@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#14211a" />
+    <title>Conventus — Documentation</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Nunito:wght@400;600;700;800&family=JetBrains+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #14211a;
+        --surface: #1a2a20;
+        --surface2: #1f3226;
+        --border: #335041;
+        --text: #eef4e6;
+        --muted: #a6b9a0;
+        --accent: #e8b24a;
+        --accent2: #6fb98a;
+      }
+      * { box-sizing: border-box; }
+      html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        font-family: "Nunito", ui-sans-serif, system-ui, sans-serif;
+        color: var(--text);
+        line-height: 1.65;
+        background:
+          radial-gradient(820px 480px at 84% -10%, #e8b24a22, transparent 62%),
+          radial-gradient(760px 560px at 10% 112%, #3f9c6a2e, transparent 60%),
+          linear-gradient(180deg, #182a1f, #111c15 70%) fixed;
+      }
+      .wrap { max-width: 880px; margin: 0 auto; padding: 48px 20px 96px; }
+      h1, h2, h3, h4 {
+        font-family: "Fraunces", Georgia, serif;
+        line-height: 1.2;
+        letter-spacing: -0.01em;
+      }
+      h1 { font-size: 2.6rem; margin: 0.2em 0 0.3em; }
+      h2 {
+        font-size: 1.7rem;
+        margin-top: 2.2em;
+        padding-bottom: 0.3em;
+        border-bottom: 1px solid var(--border);
+      }
+      h3 { font-size: 1.25rem; margin-top: 1.6em; color: var(--accent2); }
+      a { color: var(--accent); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      blockquote {
+        border-left: 3px solid var(--accent);
+        margin: 1em 0;
+        padding: 0.2em 1em;
+        color: var(--muted);
+        font-style: italic;
+      }
+      img {
+        display: block;
+        max-width: 100%;
+        margin: 14px 0;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        box-shadow: 0 14px 38px -16px rgba(6, 18, 10, 0.7);
+      }
+      hr { border: 0; border-top: 1px solid var(--border); margin: 2.5em 0; }
+      code {
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 0.86em;
+        background: #0d1117;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        padding: 1px 5px;
+      }
+      pre {
+        background: #0d1117;
+        border: 1px solid #30363d;
+        border-radius: 12px;
+        padding: 14px 16px;
+        overflow-x: auto;
+      }
+      pre code { background: none; border: 0; padding: 0; }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 1em 0;
+        font-size: 0.94em;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      th, td { border: 1px solid var(--border); padding: 7px 12px; text-align: left; }
+      th { background: var(--surface2); }
+      tbody tr:nth-child(even) td { background: #ffffff08; }
+      .mermaid {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 18px;
+        margin: 16px 0;
+        text-align: center;
+      }
+      .footer { margin-top: 4em; color: var(--muted); font-size: 0.9em; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap"><div id="content">Loading…</div>
+      <div class="footer">Rendered from <code>docs/content.md</code> · 🌿 Conventus</div>
+    </div>
+
+    <script type="text/markdown" id="md">__MARKDOWN__</script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+
+      const src = document.getElementById("md").textContent;
+      const target = document.getElementById("content");
+
+      if (typeof marked === "undefined") {
+        target.innerHTML = "<pre>" + src.replace(/[<&]/g, (c) => ({ "<": "&lt;", "&": "&amp;" }[c])) + "</pre>";
+      } else {
+        target.innerHTML = marked.parse(src);
+        // Turn ```mermaid code blocks into rendered diagrams.
+        target.querySelectorAll("code.language-mermaid").forEach((el) => {
+          const div = document.createElement("div");
+          div.className = "mermaid";
+          div.textContent = el.textContent;
+          (el.closest("pre") || el).replaceWith(div);
+        });
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: "base",
+          themeVariables: {
+            primaryColor: "#1f3226",
+            primaryTextColor: "#eef4e6",
+            primaryBorderColor: "#335041",
+            lineColor: "#6fb98a",
+            secondaryColor: "#26402f",
+            tertiaryColor: "#1a2a20",
+            fontFamily: "Nunito, system-ui, sans-serif",
+          },
+        });
+        mermaid.run({ querySelector: ".mermaid" }).catch(() => {});
+      }
+    </script>
+  </body>
+</html>

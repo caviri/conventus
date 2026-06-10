@@ -1,0 +1,17 @@
+# Local one-command run: `docker compose up --build`
+services:
+  conventus:
+    build: .
+    ports:
+      - "7860:7860"
+    environment:
+      ROOM_PASSWORD: ${ROOM_PASSWORD:-conventus}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+      SECRET_KEY: ${SECRET_KEY:-change-me-please}
+      ROOM_NAME: ${ROOM_NAME:-Conventus}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-100}
+    volumes:
+      - conventus-data:/data
+
+volumes:
+  conventus-data:

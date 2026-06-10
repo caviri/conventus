@@ -1,0 +1,264 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Nunito:wght@400;500;600;700;800&display=swap");
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ *
+ * Conventus — a solarpunk · Ghibli design. Warm sunlit palette, lush
+ * greens, lantern-gold light, soft painterly gradients and rounded,
+ * organic shapes. Override any --c-* from Settings → Custom CSS, e.g.
+ *   :root { --c-accent: #ff7a00; }
+ * ------------------------------------------------------------------ */
+:root {
+  /* Default theme: "forest dusk" — warm dark greens lit by lantern gold. */
+  --c-bg: #14211a;
+  --c-surface: #1a2a20;
+  --c-surface-2: #1f3226;
+  --c-elevated: #284130;
+  --c-border: #335041;
+  --c-text: #eef4e6;
+  --c-muted: #a6b9a0;
+  --c-accent: #e8b24a;
+  --c-accent-2: #6fb98a;
+  --c-accent-soft: #e8b24a2b;
+  --c-hover: rgba(255, 244, 214, 0.05);
+  /* Decorative scene (login illustration) */
+  --c-sun: #e8b24a;
+  --c-hill-1: #2c4b37;
+  --c-hill-2: #21392b;
+  --c-hill-3: #172a1f;
+  --c-cloud: rgba(255, 246, 222, 0.1);
+  --c-backdrop: radial-gradient(820px 480px at 84% -10%, #e8b24a26, transparent 62%),
+    radial-gradient(760px 560px at 10% 112%, #3f9c6a2e, transparent 60%),
+    linear-gradient(180deg, #182a1f, #111c15 70%);
+  --radius: 16px;
+  --shadow: 0 14px 38px -16px rgba(6, 18, 10, 0.65);
+  --font: "Nunito", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--c-backdrop);
+  background-attachment: fixed;
+  color: var(--c-text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+  scrollbar-width: thin;
+  scrollbar-color: var(--c-border) transparent;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--c-border);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* Reusable surfaces ------------------------------------------------ */
+.surface {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+}
+.card {
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition;
+  background: var(--c-elevated);
+  border: 1px solid var(--c-border);
+  color: var(--c-text);
+}
+.btn:hover {
+  border-color: var(--c-accent);
+  transform: translateY(-1px);
+}
+.btn-primary {
+  background: linear-gradient(150deg, var(--c-accent), var(--c-accent-2, var(--c-accent)));
+  border-color: transparent;
+  color: #21301f;
+  box-shadow: 0 8px 18px -8px var(--c-accent-soft);
+}
+.btn-primary:hover {
+  filter: brightness(1.05) saturate(1.05);
+}
+.input {
+  @apply w-full rounded-xl px-3 py-2 text-sm outline-none transition;
+  background: color-mix(in srgb, var(--c-bg) 80%, transparent);
+  border: 1px solid var(--c-border);
+  color: var(--c-text);
+}
+.input:focus {
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 3px var(--c-accent-soft);
+}
+
+.fade-in {
+  animation: fade-in 0.18s ease;
+}
+.sun-glow {
+  filter: drop-shadow(0 0 26px var(--c-sun));
+}
+
+/* Message action toolbar: revealed on hover for mouse users, always visible on
+ * touch devices (which have no hover). */
+.msg-actions {
+  display: flex;
+}
+@media (hover: hover) and (pointer: fine) {
+  .msg-actions {
+    display: none;
+  }
+  .group:hover .msg-actions {
+    display: flex;
+  }
+}
+.cloud {
+  animation: drift 20s ease-in-out infinite alternate;
+}
+.cloud-slow {
+  animation: drift 30s ease-in-out infinite alternate-reverse;
+}
+@keyframes drift {
+  from {
+    transform: translateX(-26px);
+  }
+  to {
+    transform: translateX(26px);
+  }
+}
+.flash {
+  animation: flash 1.2s ease;
+}
+@keyframes flash {
+  0%,
+  100% {
+    background: transparent;
+  }
+  25% {
+    background: var(--c-accent-soft);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Markdown-ish message content */
+.msg-content a {
+  color: var(--c-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.msg-content code {
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  padding: 1px 5px;
+  font-size: 0.85em;
+}
+.msg-content pre {
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+  border-radius: 10px;
+  padding: 12px;
+  overflow-x: auto;
+  margin: 6px 0;
+}
+.msg-content .mention {
+  background: var(--c-accent-soft);
+  color: var(--c-accent);
+  border-radius: 5px;
+  padding: 0 3px;
+  font-weight: 500;
+}
+.msg-content .md-media {
+  display: block;
+  max-width: 100%;
+  max-height: 22rem;
+  border-radius: 12px;
+  border: 1px solid var(--c-border);
+  margin: 6px 0;
+  cursor: zoom-in;
+}
+.msg-content .md-h {
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 10px 0 4px;
+}
+.msg-content h1.md-h {
+  font-size: 1.5rem;
+}
+.msg-content h2.md-h {
+  font-size: 1.25rem;
+}
+.msg-content h3.md-h {
+  font-size: 1.1rem;
+}
+.msg-content blockquote {
+  border-left: 3px solid var(--c-accent);
+  padding-left: 10px;
+  margin: 4px 0;
+  color: var(--c-muted);
+}
+.msg-content li {
+  margin-left: 1.3em;
+  list-style: disc;
+}
+.msg-content hr {
+  border: 0;
+  border-top: 1px solid var(--c-border);
+  margin: 10px 0;
+}
+.msg-content .md-table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 0.9em;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid var(--c-border);
+}
+.msg-content .md-table th,
+.msg-content .md-table td {
+  border: 1px solid var(--c-border);
+  padding: 5px 10px;
+  text-align: left;
+}
+.msg-content .md-table th {
+  background: var(--c-elevated);
+  font-weight: 600;
+}
+.msg-content .md-table tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--c-elevated) 45%, transparent);
+}

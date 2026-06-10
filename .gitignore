@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node / Vite
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Runtime data (ephemeral room state + uploads)
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Screenshots / scratch
+.shots/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.local

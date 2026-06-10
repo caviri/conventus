@@ -1,0 +1,48 @@
+name: Deploy to Hugging Face Space
+
+# Pushes this repo to the Hugging Face Docker Space on every push to main,
+# which triggers the Space to rebuild the container. One-time setup:
+#   - Create a Docker Space.
+#   - Add an `HF_TOKEN` repository *secret* (a write token from hf.co/settings/tokens).
+#   - Target Space: katospiegel/conventus.
+#   - Set ROOM_PASSWORD / ADMIN_PASSWORD / SECRET_KEY as *Space* secrets.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-hf-space
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Prepend the Hugging Face Space card
+        run: |
+          cat hf-space-header.yml README.md > README.hf.md
+          mv README.hf.md README.md
+
+      - name: Push to the Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "$HF_TOKEN" ]; then
+            echo "::error::Set the HF_TOKEN repository secret (see DEPLOY.md)."
+            exit 1
+          fi
+
+          echo "Deploying ${GITHUB_SHA} to https://huggingface.co/spaces/katospiegel/conventus"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "Prepare Hugging Face Space README for ${GITHUB_SHA}"
+          git push --force \
+            "https://katospiegel:$HF_TOKEN@huggingface.co/spaces/katospiegel/conventus.git" \
+            HEAD:main
