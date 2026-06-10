@@ -23,6 +23,8 @@ import {
   Smartphone,
   Share,
   Upload,
+  Lock,
+  Unlock,
 } from "lucide-react";
 
 const PRESETS: Record<string, string> = {
@@ -75,6 +77,26 @@ export default function Settings() {
     const uploaded = await api.upload(file);
     setAvatarVal(uploaded.url);
     await saveAvatar(uploaded.url);
+  }
+
+  const [namePw, setNamePw] = useState("");
+  const [nameMsg, setNameMsg] = useState("");
+
+  async function protectName() {
+    if (!namePw) return;
+    await api.post("/api/auth/protect", { password: namePw });
+    await refreshMembers();
+    setNamePw("");
+    setNameMsg("Your name is now protected ✓");
+    setTimeout(() => setNameMsg(""), 2500);
+  }
+
+  async function unprotectName() {
+    await api.post("/api/auth/protect", { password: "" });
+    await refreshMembers();
+    setNamePw("");
+    setNameMsg("Protection removed");
+    setTimeout(() => setNameMsg(""), 2500);
   }
 
   function chooseTheme(t: Theme) {
@@ -207,6 +229,58 @@ export default function Settings() {
                 onChange={(e) => uploadAvatar(e.target.files?.[0])}
               />
             </div>
+          </section>
+
+          <section className="card p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <Lock size={16} className="text-[var(--c-accent)]" />
+              <h2 className="font-semibold">Protect your name</h2>
+            </div>
+            <p className="mb-3 text-sm text-[var(--c-muted)]">
+              {me?.reserved ? (
+                <>
+                  <span className="text-[var(--c-accent)]">
+                    {user?.name} is protected.
+                  </span>{" "}
+                  Logging in with this name requires your personal password —
+                  the room password alone won't work. Enter a new password to
+                  change it, or remove the protection below.
+                </>
+              ) : (
+                <>
+                  Set a personal password for{" "}
+                  <span style={{ color: user?.color }}>{user?.name}</span>.
+                  Afterwards, anyone logging in with this name must use that
+                  password — the room password alone won't be enough.
+                </>
+              )}
+            </p>
+            <div className="flex gap-2">
+              <input
+                className="input"
+                type="password"
+                value={namePw}
+                maxLength={128}
+                placeholder={me?.reserved ? "New personal password…" : "Personal password…"}
+                onChange={(e) => setNamePw(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && protectName()}
+              />
+              <button
+                className="btn btn-primary shrink-0"
+                disabled={!namePw}
+                onClick={protectName}
+              >
+                <Lock size={15} /> {me?.reserved ? "Update" : "Protect"}
+              </button>
+              {me?.reserved && (
+                <button className="btn shrink-0" onClick={unprotectName}>
+                  <Unlock size={15} /> Remove
+                </button>
+              )}
+            </div>
+            {nameMsg && (
+              <p className="mt-2 text-sm text-emerald-400 fade-in">{nameMsg}</p>
+            )}
           </section>
 
           <section className="card p-4">

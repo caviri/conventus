@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from .. import config, db, security
 from ..deps import current_user
+from ..ws import hub
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -104,6 +105,39 @@ async def me(user=Depends(current_user)):
         "is_admin": bool(row["is_admin"]) or bool(user.get("is_admin")),
         "color": row["color"],
     }
+
+
+class ProtectRequest(BaseModel):
+    password: str = Field(default="", max_length=128)
+
+
+@router.post("/protect")
+async def protect_name(req: ProtectRequest, user=Depends(current_user)):
+    """Protect (or unprotect) your own name with a personal password.
+
+    With a non-empty password the name becomes reserved: logging in with it
+    requires that password (the room password alone no longer works). An empty
+    password removes the protection.
+    """
+    row = db.query_one("SELECT * FROM users WHERE name = ?", (user["name"],))
+    if not row:
+        raise HTTPException(status_code=401, detail="Unknown user")
+
+    if req.password:
+        db.execute(
+            "UPDATE users SET password_hash = ?, reserved = 1 WHERE name = ?",
+            (security.hash_password(req.password), user["name"]),
+        )
+        reserved = True
+    else:
+        db.execute(
+            "UPDATE users SET password_hash = NULL, reserved = 0 WHERE name = ?",
+            (user["name"],),
+        )
+        reserved = False
+
+    await hub.broadcast("member.update", {"name": user["name"]})
+    return {"ok": True, "reserved": reserved}
 
 
 @router.get("/config")

@@ -37,6 +37,7 @@ container and it's gone.
 - **Slash commands** with an autocomplete palette: `/me`, `/shrug`, `/tableflip`, `/poll`, `/dm`, `/theme`, `/topic`, `/help`, …
 - **Message search** across channels and your DMs (`⌘/Ctrl-K`).
 - **Custom avatars & status** — set an emoji/image avatar and a status line.
+- **Protect your name** — claim your name with a personal password from Settings, so nobody else can log in as you with just the room password.
 
 ![Slash command palette and ephemeral /help](img/app-commands.png)
 ![Quote-replies with a 'replying to' bar](img/replies.png)
@@ -335,6 +336,7 @@ Use the admin password in the same `"password"` field to get an **admin** token
 | ----------------------- | ---------------------------------------------- |
 | `POST /api/auth/login`  | `{password, name}` → `{token, user}`. Password may be room, admin, or reserved-name password. |
 | `GET  /api/auth/me`     | Current user                                   |
+| `POST /api/auth/protect` | `{password}` — protect your own name with a personal password (login then requires it). Empty password removes the protection. |
 | `GET  /api/auth/config` | Public: room name + version (no auth)          |
 
 **Channels & messages**
