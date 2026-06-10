@@ -26,8 +26,8 @@ def _env_int(key: str, default: int) -> int:
 # The single shared password that lets a person into the room.
 ROOM_PASSWORD: str = _env("ROOM_PASSWORD", "conventus")
 
-# The password that unlocks the admin panel (creating channels, reserving
-# names, managing bots, exporting/importing the room).
+# The password that unlocks the admin panel (reserving names, managing bots,
+# exporting/importing the room).
 ADMIN_PASSWORD: str = _env("ADMIN_PASSWORD", "admin")
 
 # Used to sign session tokens. If you don't pin it, sessions reset on restart —

@@ -258,17 +258,15 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
               <div className="card absolute right-1 top-7 z-20 w-44 overflow-hidden p-1 text-sm shadow-2xl fade-in">
-                {user?.is_admin && (
-                  <button
-                    className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--c-elevated)]"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setCreating(true);
-                    }}
-                  >
-                    <Hash size={15} /> New channel
-                  </button>
-                )}
+                <button
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--c-elevated)]"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setCreating(true);
+                  }}
+                >
+                  <Hash size={15} /> New channel
+                </button>
                 <button
                   className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--c-elevated)]"
                   onClick={() => createBoard("canvas")}

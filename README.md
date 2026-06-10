@@ -41,7 +41,7 @@ delete it.
 - ✍️ **Rich messages** — edit, delete, **emoji reactions**, **quote-replies**, **pinned messages**, **permalinks**, and `/slash` commands (`/me`, `/shrug`, `/poll`, `/dm`, `/theme`, `/topic`, `/help`, …) with an autocomplete palette.
 - 🔎 **Message search** across channels and your DMs (⌘/Ctrl-K), and date dividers.
 - 🖋️ **Markdown** — headings, lists, blockquotes, **tables**, syntax-highlighted **code blocks**, and sandboxed **HTML widgets**.
-- 🙋 **Presence + status** — set a status (emoji + text); reserved names; admins manage channels, members and bots.
+- 🙋 **Presence + status** — set a status (emoji + text); reserved names; admins manage channel settings, members and bots.
 - 🗂️ **Folders** — group channels and boards into collapsible folders (drag-and-drop), shared across the room.
 
 **Media**

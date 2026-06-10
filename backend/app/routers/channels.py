@@ -44,7 +44,7 @@ async def list_channels(user=Depends(current_user)):
 
 
 @router.post("")
-async def create_channel(req: ChannelCreate, user=Depends(require_admin)):
+async def create_channel(req: ChannelCreate, user=Depends(current_user)):
     name = req.name.strip().lstrip("#").replace(" ", "-").lower()
     if db.query_one("SELECT 1 FROM channels WHERE name = ?", (name,)):
         raise HTTPException(status_code=409, detail="Channel already exists")
