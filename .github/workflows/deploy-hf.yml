@@ -24,10 +24,29 @@ jobs:
           fetch-depth: 0
           lfs: true
 
-      - name: Prepend the Hugging Face Space card
+      - name: Prepare Hugging Face deploy snapshot
         run: |
+          git checkout --orphan hf-deploy
+          git rm -rf --cached . >/dev/null
+
           cat hf-space-header.yml README.md > README.hf.md
           mv README.hf.md README.md
+
+          RAW_BASE="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}"
+          sed -i -E "s#src=\"docs/img/#src=\"${RAW_BASE}/docs/img/#g" README.md
+          sed -i -E "s#\]\(img/#](${RAW_BASE}/docs/img/#g" docs/content.md docs/index.html
+
+          rm -rf docs/img
+
+          if find . -type f \( -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.gif' -o -name '*.webp' -o -name '*.pdf' -o -name '*.zip' \) | grep .; then
+            echo "::error::Hugging Face plain git rejects binary files. Strip them or move them to Xet/LFS."
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Deploy snapshot from ${GITHUB_SHA}"
 
       - name: Push to the Space
         env:
@@ -39,10 +58,6 @@ jobs:
           fi
 
           echo "Deploying ${GITHUB_SHA} to https://huggingface.co/spaces/katospiegel/conventus"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add README.md
-          git commit -m "Prepare Hugging Face Space README for ${GITHUB_SHA}"
           git push --force \
             "https://katospiegel:$HF_TOKEN@huggingface.co/spaces/katospiegel/conventus.git" \
-            HEAD:main
+            hf-deploy:main

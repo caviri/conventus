@@ -2,7 +2,10 @@
 
 Conventus is a single Docker container, so a **Docker Space** runs it as-is. The
 GitHub Action prepends `hf-space-header.yml` to `README.md` before syncing; that
-header (`sdk: docker`, `app_port: 7860`) is all the config the Space needs.
+header (`sdk: docker`, `app_port: 7860`) is all the config the Space needs. The
+Action publishes a clean orphan snapshot and strips `docs/img` because Hugging
+Face's plain Space git remote rejects binary screenshots unless they are stored
+with Xet/LFS.
 
 ## Option A — manual (one push)
 
@@ -11,12 +14,18 @@ header (`sdk: docker`, `app_port: 7860`) is all the config the Space needs.
    ```bash
    git worktree add ../conventus-hf main
    cd ../conventus-hf
+   git checkout --orphan hf-deploy
+   git rm -rf --cached . >/dev/null
    cat hf-space-header.yml README.md > README.hf.md
    mv README.hf.md README.md
+   RAW_BASE="https://raw.githubusercontent.com/your-github-user/conventus/$(git rev-parse main)"
+   sed -i -E "s#src=\"docs/img/#src=\"${RAW_BASE}/docs/img/#g" README.md
+   sed -i -E "s#\]\(img/#](${RAW_BASE}/docs/img/#g" docs/content.md docs/index.html
+   rm -rf docs/img
    git remote add space https://huggingface.co/spaces/your-name/conventus
-   git add README.md
-   git commit -m "Prepare Hugging Face Space README"
-   git push space HEAD:main
+   git add -A
+   git commit -m "Deploy snapshot"
+   git push --force space hf-deploy:main
    ```
    (When prompted, use your HF username and a **write** token from
    <https://huggingface.co/settings/tokens> as the password.)
