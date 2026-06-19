@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from .. import agent, db
 from ..deps import current_user, require_admin
+from ..ws import hub
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
@@ -71,6 +72,8 @@ async def update_agent(req: AgentUpdate, user=Depends(require_admin)):
         db.execute(
             f"UPDATE agent SET {assignments} WHERE id = 1", (*fields.values(),)
         )
+    # Nudge clients to refresh the roster (the Assistant appears/disappears there).
+    await hub.broadcast("member.update", {"name": agent.get_config().get("name", "")})
     return _serialize(agent.get_config())
 
 

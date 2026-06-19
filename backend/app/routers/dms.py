@@ -74,14 +74,14 @@ async def list_dms(user=Depends(current_user)):
 async def open_dm(req: DMOpen, user=Depends(current_user)):
     me = user["name"]
     other = req.with_user.strip()
-    if other == me:
-        raise HTTPException(status_code=400, detail="Cannot DM yourself")
     if not db.query_one("SELECT 1 FROM users WHERE name = ?", (other,)):
         raise HTTPException(status_code=404, detail="No such user")
     dm = _get_or_create(me, other)
     payload = {"id": dm["id"], "with": other, "online": hub.is_online(other)}
-    # Let the other side know a thread exists so it shows up live.
-    await hub.send_to_users([other], "dm.open", {"id": dm["id"], "with": me})
+    # A DM with yourself is a private "notes to self" space — nobody else to
+    # notify. Otherwise let the other side know the thread exists so it shows up live.
+    if other != me:
+        await hub.send_to_users([other], "dm.open", {"id": dm["id"], "with": me})
     return payload
 
 
