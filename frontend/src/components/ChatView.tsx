@@ -6,7 +6,7 @@ import Composer from "./Composer";
 import type { Message as MessageType } from "../types";
 import EmptyState from "./EmptyState";
 import { formatDate } from "../format";
-import { Hash, Circle, Pencil, Pin, X, ArrowDown, Trash2 } from "lucide-react";
+import { Hash, Circle, Pencil, Pin, X, ArrowDown, Trash2, Sparkles } from "lucide-react";
 
 function DateDivider({ ts }: { ts: number }) {
   return (
@@ -28,6 +28,7 @@ export default function ChatView() {
   const agent = useStore((s) => s.agent);
   const renameConversation = useStore((s) => s.renameConversation);
   const deleteConversation = useStore((s) => s.deleteConversation);
+  const addConversationDivider = useStore((s) => s.addConversationDivider);
   const user = useStore((s) => s.user);
   const messages = useStore((s) => s.messages);
   const typing = useStore((s) => s.typing);
@@ -253,11 +254,20 @@ export default function ChatView() {
           )}
           {conv && (
             <button
+              className="btn !py-1.5 text-xs"
+              onClick={() => addConversationDivider(conv.id)}
+              title="Start a new conversation — keeps the history above, gives the Assistant a fresh start"
+            >
+              <Sparkles size={14} /> New
+            </button>
+          )}
+          {conv && (
+            <button
               className="grid h-8 w-8 place-items-center rounded-lg text-[var(--c-muted)] hover:bg-[var(--c-elevated)] hover:text-red-300"
               onClick={() => {
                 if (window.confirm(`Delete “${conv.title}”?`)) deleteConversation(conv.id);
               }}
-              title="Delete conversation"
+              title="Clear this thread"
             >
               <Trash2 size={15} />
             </button>

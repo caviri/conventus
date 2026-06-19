@@ -150,3 +150,21 @@ async def post_conversation_message(
     # Stream the Assistant's reply in the background; the POST returns the user msg.
     messaging._spawn(agent.reply_in_conversation(conversation_id))
     return message
+
+
+@router.post("/{conversation_id}/divider")
+async def add_divider(conversation_id: int, user=Depends(current_user)):
+    """Start a new conversation segment within the same thread — a separator that
+    also resets the Assistant's context (it only reads messages after it)."""
+    _owned(conversation_id, user["name"])
+    msg = await messaging.create_message(
+        author=user["name"],
+        content="New conversation",
+        kind="system",
+        conversation_id=conversation_id,
+    )
+    db.execute(
+        "UPDATE conversations SET updated_at = ? WHERE id = ?",
+        (db.now(), conversation_id),
+    )
+    return msg

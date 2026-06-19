@@ -11,6 +11,7 @@ dependency stays one-directional.
 from __future__ import annotations
 
 import json
+import time
 from typing import Any, AsyncIterator, Callable, Optional
 
 import httpx
@@ -20,6 +21,12 @@ from .ws import hub
 
 CONTEXT_LIMIT = 20
 STREAM_FLUSH_CHARS = 24  # how many new chars before we push a live update
+
+# Channel "awake" sessions: an @mention wakes the Assistant in a channel; while
+# awake it replies to every message and the window is extended by activity. After
+# SESSION_TTL seconds of silence it sleeps and ignores non-mentions until woken.
+SESSION_TTL = 300  # 5 minutes
+_awake: dict[int, float] = {}  # channel_id -> epoch when the awake window ends
 # Reasoning models (e.g. gpt-oss) spend tokens on an internal trace before the
 # answer; give them ample budget so they don't get cut off with empty content.
 REASONING_MAX_TOKENS = 4096
@@ -209,11 +216,18 @@ def _channel_history(channel_id: int, agent_name: str) -> list[dict[str, str]]:
 
 
 def _conversation_history(conversation_id: int, agent_name: str) -> list[dict[str, str]]:
+    # Context resets at the most recent "new conversation" divider (a system
+    # message), so each new segment starts the Assistant fresh.
+    div = db.query_one(
+        "SELECT MAX(id) AS m FROM messages WHERE conversation_id = ? AND kind = 'system'",
+        (conversation_id,),
+    )
+    after = (div and div["m"]) or 0
     rows = db.query_all(
         "SELECT author, content FROM messages "
-        "WHERE conversation_id = ? AND kind != 'system' AND content != '' "
+        "WHERE conversation_id = ? AND id > ? AND kind != 'system' AND content != '' "
         "ORDER BY id DESC LIMIT ?",
-        (conversation_id, CONTEXT_LIMIT),
+        (conversation_id, after, CONTEXT_LIMIT),
     )
     rows.reverse()
     return _to_messages(rows, agent_name)
@@ -222,14 +236,23 @@ def _conversation_history(conversation_id: int, agent_name: str) -> list[dict[st
 # --- triggers ------------------------------------------------------------
 
 async def maybe_reply_channel(message: dict[str, Any]) -> None:
-    """Reply inline in a channel when the Assistant is @mentioned."""
+    """Reply inline in a channel. An @mention wakes the Assistant; while awake it
+    follows the whole conversation, replying to every message until it sleeps
+    after SESSION_TTL seconds of silence."""
     cfg = get_config()
     if not is_enabled(cfg):
         return
     name = cfg["name"]
-    if message["author"] == name or not _mentioned(message["content"], name):
+    if message["author"] == name:
         return
     channel_id = message["channel_id"]
+    now = time.time()
+    mentioned = _mentioned(message["content"], name)
+    awake = _awake.get(channel_id, 0) > now
+    if not mentioned and not awake:
+        return  # asleep and not addressed — stay quiet
+    # Woken or kept awake by activity: extend the session window.
+    _awake[channel_id] = now + SESSION_TTL
     await hub.broadcast("typing", {"name": name, "channel_id": channel_id})
 
     msgs: list[dict[str, str]] = []

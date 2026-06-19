@@ -44,8 +44,12 @@ function MessageRow({
 
   if (message.kind === "system") {
     return (
-      <div className="my-1 text-center text-xs text-[var(--c-muted)]">
-        {message.content}
+      <div className="my-3 flex items-center gap-3 px-4">
+        <div className="h-px flex-1 bg-[var(--c-border)]" />
+        <span className="text-[10px] uppercase tracking-wide text-[var(--c-muted)]">
+          {message.content}
+        </span>
+        <div className="h-px flex-1 bg-[var(--c-border)]" />
       </div>
     );
   }

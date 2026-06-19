@@ -67,6 +67,7 @@ interface State {
   newConversation: (title?: string) => Promise<void>;
   openConversation: (id: number) => Promise<void>;
   openAgentChat: () => Promise<void>;
+  addConversationDivider: (id: number) => Promise<void>;
   renameConversation: (id: number, title: string) => Promise<void>;
   setConversationPrompt: (id: number, systemPrompt: string) => Promise<void>;
   deleteConversation: (id: number) => Promise<void>;
@@ -226,6 +227,11 @@ export const useStore = create<State>((set, get) => ({
     const existing = get().conversations[0];
     if (existing) await get().setView({ type: "conversation", id: existing.id });
     else await get().newConversation();
+  },
+  // Start a new segment in the same thread — a divider that resets the
+  // Assistant's context but keeps the scroll-back history.
+  async addConversationDivider(id) {
+    await api.post(`/api/conversations/${id}/divider`, {});
   },
   async renameConversation(id, title) {
     await api.patch(`/api/conversations/${id}`, { title });
