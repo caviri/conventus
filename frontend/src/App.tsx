@@ -181,7 +181,7 @@ export default function App() {
         <Sidebar onNavigate={() => setSidebarOpen(false)} />
       </div>
 
-      <main className="flex min-w-0 flex-1 flex-col">
+      <main className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
         <button
           className="btn absolute left-3 top-[calc(0.7rem+env(safe-area-inset-top))] z-10 !p-2 md:top-3 md:hidden"
           onClick={() => setSidebarOpen(true)}

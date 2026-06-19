@@ -56,7 +56,7 @@ export default function MobileTabBar() {
   ];
 
   return (
-    <nav className="surface flex border-t border-[var(--c-border)] pb-[env(safe-area-inset-bottom)] md:hidden">
+    <nav className="surface flex border-t border-[var(--c-border)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:hidden">
       {tabs.map((t) => (
         <button
           key={t.key}

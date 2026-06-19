@@ -298,7 +298,7 @@ export default function Composer({
 
   return (
     <div
-      className="px-4 pb-4 md:pb-[calc(1rem+env(safe-area-inset-bottom))]"
+      className="pb-4 pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))] md:pb-[calc(1rem+env(safe-area-inset-bottom))]"
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();

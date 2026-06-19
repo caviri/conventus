@@ -88,6 +88,13 @@ html {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
+
+/* iOS PWA: every top bar is a <header class="surface">. Reserve the safe area
+   (the Dynamic Island / status bar) on top of its normal py-3 so the title and
+   controls don't slide underneath it. Insets are 0 on non-notch devices. */
+header.surface {
+  padding-top: calc(0.75rem + env(safe-area-inset-top));
+}
 .btn {
   @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition;
   background: var(--c-elevated);

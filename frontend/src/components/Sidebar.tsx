@@ -223,8 +223,8 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
   const ungroupedBoards = boards.filter((b) => b.folder_id == null);
 
   return (
-    <aside className="surface flex h-full w-72 flex-col">
-      <div className="flex items-center justify-between border-b border-[var(--c-border)] px-4 py-3.5">
+    <aside className="surface flex h-full w-72 max-w-[85vw] flex-col">
+      <div className="flex items-center justify-between border-b border-[var(--c-border)] px-4 pb-3.5 pt-[calc(0.875rem+env(safe-area-inset-top))]">
         <div className="min-w-0">
           <div className="font-display truncate text-lg font-semibold">{roomName}</div>
         </div>
