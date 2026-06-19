@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import config, db, security
 from .collab import hub as collab_hub
+from .voice import hub as voice_hub
 from .routers import (
     admin,
     agent,
@@ -161,6 +162,11 @@ async def websocket_endpoint(socket: WebSocket, token: str = "") -> None:
 @app.websocket("/collab/{doc}")
 async def collab_endpoint(socket: WebSocket, doc: str, token: str = "") -> None:
     await collab_hub.handle(doc, socket, token)
+
+
+@app.websocket("/voice/{room}")
+async def voice_endpoint(socket: WebSocket, room: str, token: str = "") -> None:
+    await voice_hub.handle(room, socket, token)
 
 
 # --- Static SPA ----------------------------------------------------------

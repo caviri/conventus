@@ -23,6 +23,7 @@ export function viewKey(view: View): string {
   if (view.type === "canvas") return `canvas:${view.id}`;
   if (view.type === "whiteboard") return `whiteboard:${view.id}`;
   if (view.type === "kanban") return `kanban:${view.id}`;
+  if (view.type === "room") return `room:${view.id}`;
   return view.type;
 }
 

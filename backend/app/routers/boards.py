@@ -15,7 +15,7 @@ from ..ws import hub
 router = APIRouter(prefix="/api/boards", tags=["boards"])
 
 
-BOARD_KINDS = ("canvas", "whiteboard", "kanban")
+BOARD_KINDS = ("canvas", "whiteboard", "kanban", "room")
 
 
 class BoardCreate(BaseModel):
