@@ -3,7 +3,7 @@ import { getToken } from "../api";
 import { useStore } from "../store";
 import { ditherDuotone } from "../dither";
 import BoardActions from "./BoardActions";
-import { Radio, Mic, PhoneOff, Loader2, Video, VideoOff } from "lucide-react";
+import { Radio, Mic, PhoneOff, Loader2, Video, VideoOff, SlidersHorizontal } from "lucide-react";
 
 // A push-to-talk voice room. The browser captures + Opus-compresses the mic
 // (low bitrate = walkie crunch); the server just relays clips to the room. See
@@ -16,10 +16,18 @@ import { Radio, Mic, PhoneOff, Loader2, Video, VideoOff } from "lucide-react";
 const BITRATE = 16000;
 const KIND_AUDIO = 0;
 const KIND_VIDEO = 1;
-const VIDEO_W = 192;
-const VIDEO_H = 144;
-const VIDEO_INTERVAL = 160; // ms between frames (~6 fps)
-const VIDEO_QUALITY = 0.6;
+
+// Per-client video compression — everyone tunes their own outgoing feed.
+const RES_PRESETS = [
+  { label: "128×96", w: 128, h: 96 },
+  { label: "192×144", w: 192, h: 144 },
+  { label: "256×192", w: 256, h: 192 },
+  { label: "320×240", w: 320, h: 240 },
+];
+const FPS_PRESETS = [2, 4, 6, 10, 15];
+const DEFAULT_RES = 1; // 192×144
+const DEFAULT_FPS = 6;
+const DEFAULT_QUALITY = 0.6;
 
 function pickMime(): string {
   const cands = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
@@ -51,6 +59,10 @@ export default function Room({
   const [transmitting, setTransmitting] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
   const [dither, setDither] = useState(true);
+  const [resIdx, setResIdx] = useState(DEFAULT_RES);
+  const [fps, setFps] = useState(DEFAULT_FPS);
+  const [quality, setQuality] = useState(DEFAULT_QUALITY);
+  const [showComp, setShowComp] = useState(false);
   // Latest received video frame per sender, as object URLs (remote tiles).
   const [videoFrames, setVideoFrames] = useState<Record<string, string>>({});
 
@@ -66,6 +78,7 @@ export default function Room({
   const localCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const camTimerRef = useRef<number | null>(null);
   const ditherRef = useRef(true);
+  const qualityRef = useRef(DEFAULT_QUALITY);
 
   function markTalking(who: string, on: boolean) {
     setTalking((prev) => {
@@ -242,7 +255,6 @@ export default function Room({
       await v.play();
       camVideoRef.current = v;
       setCameraOn(true);
-      camTimerRef.current = window.setInterval(captureFrame, VIDEO_INTERVAL);
     } catch {
       /* permission denied / no camera — silently stay audio-only */
     }
@@ -261,7 +273,7 @@ export default function Room({
         if (blob) sendFrame(KIND_VIDEO, await blob.arrayBuffer());
       },
       "image/jpeg",
-      VIDEO_QUALITY
+      qualityRef.current
     );
   }
 
@@ -312,10 +324,26 @@ export default function Room({
     txRef.current = false;
   }
 
-  // Keep the capture loop's dither flag in sync without re-creating the timer.
+  // Keep the capture loop's live knobs in sync without re-creating the timer.
   useEffect(() => {
     ditherRef.current = dither;
   }, [dither]);
+  useEffect(() => {
+    qualityRef.current = quality;
+  }, [quality]);
+
+  // (Re)create the capture timer whenever the camera turns on or the frame rate
+  // changes. Resolution/quality/dither are read live, so they need no restart.
+  useEffect(() => {
+    if (!cameraOn) return;
+    const id = window.setInterval(captureFrame, Math.round(1000 / fps));
+    camTimerRef.current = id;
+    return () => {
+      clearInterval(id);
+      if (camTimerRef.current === id) camTimerRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameraOn, fps]);
 
   // Spacebar = push-to-talk.
   useEffect(() => {
@@ -404,8 +432,8 @@ export default function Room({
                         {hasLocalCam ? (
                           <canvas
                             ref={localCanvasRef}
-                            width={VIDEO_W}
-                            height={VIDEO_H}
+                            width={RES_PRESETS[resIdx].w}
+                            height={RES_PRESETS[resIdx].h}
                             className="h-24 w-32 -scale-x-100 object-cover"
                           />
                         ) : (
@@ -462,23 +490,78 @@ export default function Room({
             <p className="text-xs text-[var(--c-muted)]">Hold the button or the spacebar.</p>
 
             {/* Camera controls */}
-            <div className="flex items-center gap-2">
-              <button
-                className={`btn ${cameraOn ? "btn-primary" : ""}`}
-                onClick={() => (cameraOn ? stopCamera() : startCamera())}
-              >
-                {cameraOn ? <VideoOff size={16} /> : <Video size={16} />}
-                {cameraOn ? "Stop camera" : "Start camera"}
-              </button>
-              {cameraOn && (
-                <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[var(--c-muted)]">
-                  <input
-                    type="checkbox"
-                    checked={dither}
-                    onChange={(e) => setDither(e.target.checked)}
-                  />
-                  Dither
-                </label>
+            <div className="flex flex-col items-center gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  className={`btn ${cameraOn ? "btn-primary" : ""}`}
+                  onClick={() => (cameraOn ? stopCamera() : startCamera())}
+                >
+                  {cameraOn ? <VideoOff size={16} /> : <Video size={16} />}
+                  {cameraOn ? "Stop camera" : "Start camera"}
+                </button>
+                <button
+                  className={`btn ${showComp ? "btn-primary" : ""}`}
+                  onClick={() => setShowComp((v) => !v)}
+                  title="Compression settings"
+                >
+                  <SlidersHorizontal size={16} /> Compression
+                </button>
+              </div>
+
+              {showComp && (
+                <div className="card flex flex-col gap-3 p-3 text-sm fade-in" style={{ minWidth: "16rem" }}>
+                  <p className="text-xs text-[var(--c-muted)]">
+                    Tunes <em>your</em> outgoing video. Lower = lighter on the network.
+                  </p>
+                  <label className="flex items-center justify-between gap-3">
+                    <span>Resolution</span>
+                    <select
+                      className="input !w-auto !py-1 text-xs"
+                      value={resIdx}
+                      onChange={(e) => setResIdx(Number(e.target.value))}
+                    >
+                      {RES_PRESETS.map((r, i) => (
+                        <option key={r.label} value={i}>{r.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center justify-between gap-3">
+                    <span>Frame rate</span>
+                    <select
+                      className="input !w-auto !py-1 text-xs"
+                      value={fps}
+                      onChange={(e) => setFps(Number(e.target.value))}
+                    >
+                      {FPS_PRESETS.map((f) => (
+                        <option key={f} value={f}>{f} fps</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center justify-between gap-3">
+                    <span>Quality</span>
+                    <span className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min={0.2}
+                        max={0.9}
+                        step={0.1}
+                        value={quality}
+                        onChange={(e) => setQuality(Number(e.target.value))}
+                      />
+                      <span className="w-8 text-right text-xs text-[var(--c-muted)]">
+                        {Math.round(quality * 100)}%
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex cursor-pointer items-center justify-between gap-3">
+                    <span>Dither (duotone)</span>
+                    <input
+                      type="checkbox"
+                      checked={dither}
+                      onChange={(e) => setDither(e.target.checked)}
+                    />
+                  </label>
+                </div>
               )}
             </div>
           </>
