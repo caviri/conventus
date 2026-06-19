@@ -127,23 +127,30 @@ CREATE TABLE IF NOT EXISTS collab_updates (
 );
 CREATE INDEX IF NOT EXISTS idx_collab_doc ON collab_updates(doc, id);
 
+-- Bots are OpenAI-compatible endpoints that participate in the room. Exactly one
+-- bot may carry is_assistant = 1 — the "Assistant" (the Gardener by default),
+-- which additionally powers private conversations, live-doc completion and kanban
+-- fill. model_type tells reasoning models (gpt-oss, o-series) to request a bigger
+-- token budget. All mention-triggered bots get channel "awake" sessions.
 CREATE TABLE IF NOT EXISTS bots (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     name          TEXT NOT NULL UNIQUE,
     base_url      TEXT NOT NULL,
     api_key       TEXT NOT NULL DEFAULT '',
     model         TEXT NOT NULL DEFAULT 'gpt-4o-mini',
+    model_type    TEXT NOT NULL DEFAULT 'standard',  -- standard | reasoning
     system_prompt TEXT NOT NULL DEFAULT '',
     trigger       TEXT NOT NULL DEFAULT 'mention',  -- mention | all
     channels      TEXT NOT NULL DEFAULT '[]',       -- json list of channel ids, [] = all
     color         TEXT NOT NULL DEFAULT '#10b981',
     avatar        TEXT NOT NULL DEFAULT '',         -- emoji or image URL
     enabled       INTEGER NOT NULL DEFAULT 1,
+    is_assistant  INTEGER NOT NULL DEFAULT 0,       -- the special room Assistant
     created_at    REAL NOT NULL
 );
 
--- The room's single configurable Assistant (one row, id = 1). Powers private
--- conversations, the channel @mention trigger, live-doc completion and kanban fill.
+-- DEPRECATED: the old single-row Assistant config. Kept only so existing rooms
+-- can migrate their settings into an is_assistant bot once (see init()).
 CREATE TABLE IF NOT EXISTS agent (
     id            INTEGER PRIMARY KEY CHECK (id = 1),
     name          TEXT NOT NULL DEFAULT 'Gardener',
@@ -151,7 +158,7 @@ CREATE TABLE IF NOT EXISTS agent (
     api_key       TEXT NOT NULL DEFAULT '',
     model         TEXT NOT NULL DEFAULT 'openai/gpt-oss-120b',
     model_type    TEXT NOT NULL DEFAULT 'standard',  -- standard | reasoning
-    system_prompt TEXT NOT NULL DEFAULT '',           -- seeded with DEFAULT_AGENT_PROMPT in init()
+    system_prompt TEXT NOT NULL DEFAULT '',
     color         TEXT NOT NULL DEFAULT '#4f9a5b',
     avatar        TEXT NOT NULL DEFAULT '🌱',
     enabled       INTEGER NOT NULL DEFAULT 0
@@ -172,6 +179,8 @@ CREATE INDEX IF NOT EXISTS idx_conversations_owner ON conversations(owner, id);
 # Lightweight additive migrations for databases created by older versions.
 MIGRATIONS = [
     ("bots", "avatar", "TEXT NOT NULL DEFAULT ''"),
+    ("bots", "model_type", "TEXT NOT NULL DEFAULT 'standard'"),
+    ("bots", "is_assistant", "INTEGER NOT NULL DEFAULT 0"),
     ("messages", "reply_to", "INTEGER"),
     ("messages", "pinned", "INTEGER NOT NULL DEFAULT 0"),
     ("messages", "conversation_id", "INTEGER"),
@@ -231,31 +240,66 @@ def init() -> None:
                 "INSERT INTO boards(kind, name, created_at) VALUES ('whiteboard', 'Whiteboard', ?)",
                 (now,),
             )
-        # The single Assistant row (disabled until an admin configures it).
-        conn.execute("INSERT OR IGNORE INTO agent(id) VALUES (1)")
-        # Seed the default personality when none is set yet — applies to existing
-        # rooms too, but leaves any admin-customised prompt untouched.
+        # Ensure exactly one Assistant bot (the Gardener) exists. The first time,
+        # migrate the old single-row `agent` config into a bot; otherwise seed a
+        # fresh default (disabled until an admin sets the endpoint + key).
+        if conn.execute("SELECT 1 FROM bots WHERE is_assistant = 1").fetchone() is None:
+            old = conn.execute("SELECT * FROM agent WHERE id = 1").fetchone()
+            name = (old["name"] if old and old["name"] else "Gardener")
+            if conn.execute("SELECT 1 FROM bots WHERE name = ?", (name,)).fetchone():
+                name = f"{name} (Assistant)"  # bots.name is UNIQUE
+            old_configured = bool(old) and (
+                old["api_key"]
+                or old["enabled"]
+                or (old["base_url"] and old["base_url"] != "https://api.openai.com/v1")
+            )
+            if old_configured:
+                conn.execute(
+                    "INSERT INTO bots(name, base_url, api_key, model, model_type, "
+                    "system_prompt, trigger, channels, color, avatar, enabled, "
+                    "is_assistant, created_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, 'mention', '[]', ?, ?, ?, 1, ?)",
+                    (name, old["base_url"], old["api_key"], old["model"],
+                     old["model_type"], old["system_prompt"], old["color"],
+                     old["avatar"], old["enabled"], now),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO bots(name, base_url, model, model_type, system_prompt, "
+                    "trigger, channels, color, avatar, enabled, is_assistant, created_at) "
+                    "VALUES (?, 'https://api.openai.com/v1', 'openai/gpt-oss-120b', "
+                    "'standard', ?, 'mention', '[]', '#4f9a5b', '🌱', 0, 1, ?)",
+                    (name, DEFAULT_AGENT_PROMPT, now),
+                )
+        # Seed the default personality when the Assistant has no prompt yet —
+        # applies to existing rooms too, but leaves a customised prompt untouched.
         conn.execute(
-            "UPDATE agent SET system_prompt = ? WHERE id = 1 AND system_prompt = ''",
+            "UPDATE bots SET system_prompt = ? WHERE is_assistant = 1 AND system_prompt = ''",
             (DEFAULT_AGENT_PROMPT,),
         )
         # Optionally point the Assistant at an endpoint from the environment so a
         # fresh deploy ships with it ready. Env manages only the endpoint + token
-        # (+ enabled); model/type/name stay admin-controlled in Settings and are
-        # only touched here when their env vars are explicitly provided — so an
-        # admin's Settings choices are never clobbered on restart.
+        # (+ enabled); model/type/name stay admin-controlled and are only touched
+        # when their env vars are explicitly provided.
         if config.AGENT_ENDPOINT and config.AGENT_TOKEN:
             conn.execute(
-                "UPDATE agent SET base_url = ?, api_key = ?, enabled = 1 WHERE id = 1",
+                "UPDATE bots SET base_url = ?, api_key = ?, enabled = 1 WHERE is_assistant = 1",
                 (config.AGENT_ENDPOINT, config.AGENT_TOKEN),
             )
-            if config.AGENT_NAME:
-                conn.execute("UPDATE agent SET name = ? WHERE id = 1", (config.AGENT_NAME,))
+            if config.AGENT_NAME and conn.execute(
+                "SELECT 1 FROM bots WHERE name = ? AND is_assistant = 0", (config.AGENT_NAME,)
+            ).fetchone() is None:
+                conn.execute(
+                    "UPDATE bots SET name = ? WHERE is_assistant = 1", (config.AGENT_NAME,)
+                )
             if config.AGENT_MODEL:
-                conn.execute("UPDATE agent SET model = ? WHERE id = 1", (config.AGENT_MODEL,))
+                conn.execute(
+                    "UPDATE bots SET model = ? WHERE is_assistant = 1", (config.AGENT_MODEL,)
+                )
             if config.AGENT_MODEL_TYPE in ("standard", "reasoning"):
                 conn.execute(
-                    "UPDATE agent SET model_type = ? WHERE id = 1", (config.AGENT_MODEL_TYPE,)
+                    "UPDATE bots SET model_type = ? WHERE is_assistant = 1",
+                    (config.AGENT_MODEL_TYPE,),
                 )
 
 

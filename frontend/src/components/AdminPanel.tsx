@@ -15,141 +15,29 @@ import {
   Pencil,
   Check,
   X,
-  Sparkles,
-  Save,
+  Star,
 } from "lucide-react";
 
-type Tab = "assistant" | "bots" | "members" | "room";
+type Tab = "bots" | "members" | "room";
 
 export default function AdminPanel() {
-  const [tab, setTab] = useState<Tab>("assistant");
+  const [tab, setTab] = useState<Tab>("bots");
   return (
     <div className="flex h-full flex-col">
       <header className="surface flex items-center gap-3 border-b border-[var(--c-border)] px-4 py-3 pl-14 md:pl-4">
         <Shield size={18} className="text-amber-400" />
         <div className="font-semibold">Admin</div>
         <div className="ml-auto flex gap-1 overflow-x-auto md:ml-4">
-          <Tabish icon={<Sparkles size={15} />} label="Assistant" active={tab === "assistant"} onClick={() => setTab("assistant")} />
-          <Tabish icon={<BotIcon size={15} />} label="Bots" active={tab === "bots"} onClick={() => setTab("bots")} />
+          <Tabish icon={<BotIcon size={15} />} label="Bots & Assistant" active={tab === "bots"} onClick={() => setTab("bots")} />
           <Tabish icon={<Users size={15} />} label="Members" active={tab === "members"} onClick={() => setTab("members")} />
           <Tabish icon={<Database size={15} />} label="Room" active={tab === "room"} onClick={() => setTab("room")} />
         </div>
       </header>
       <div className="flex-1 overflow-y-auto p-4">
         <div className="mx-auto max-w-3xl">
-          {tab === "assistant" && <AssistantTab />}
           {tab === "bots" && <BotsTab />}
           {tab === "members" && <MembersTab />}
           {tab === "room" && <RoomTab />}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AssistantTab() {
-  const agent = useStore((s) => s.agent);
-  const refreshAgent = useStore((s) => s.refreshAgent);
-  const [form, setForm] = useState({
-    name: "Assistant",
-    base_url: "https://api.openai.com/v1",
-    model: "openai/gpt-oss-120b",
-    model_type: "standard" as "standard" | "reasoning",
-    system_prompt: "",
-    color: "#8b5cf6",
-    avatar: "✨",
-    enabled: false,
-  });
-  const [apiKey, setApiKey] = useState(""); // blank = keep existing
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    refreshAgent();
-  }, [refreshAgent]);
-  useEffect(() => {
-    if (!agent) return;
-    setForm({
-      name: agent.name,
-      base_url: agent.base_url,
-      model: agent.model,
-      model_type: agent.model_type,
-      system_prompt: agent.system_prompt,
-      color: agent.color,
-      avatar: agent.avatar,
-      enabled: agent.enabled,
-    });
-  }, [agent]);
-
-  const keySet = agent?.api_key === "•••";
-
-  async function save() {
-    const payload: Record<string, unknown> = { ...form };
-    if (apiKey) payload.api_key = apiKey;
-    await api.patch("/api/agent", payload);
-    setApiKey("");
-    await refreshAgent();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
-  }
-
-  return (
-    <div className="space-y-4">
-      <p className="text-sm text-[var(--c-muted)]">
-        The room Assistant — one OpenAI-compatible endpoint that powers private
-        conversations, inline channel replies (@mention), live-document completion
-        and kanban fill. It appears in the member list when enabled.
-      </p>
-      <div className="card space-y-3 p-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Name (used for @mentions)">
-            <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </Field>
-          <Field label="Model">
-            <input className="input" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
-          </Field>
-          <Field label="Model type">
-            <select
-              className="input"
-              value={form.model_type}
-              onChange={(e) => setForm({ ...form, model_type: e.target.value as "standard" | "reasoning" })}
-            >
-              <option value="standard">Standard</option>
-              <option value="reasoning">Reasoning (e.g. gpt-oss, o-series)</option>
-            </select>
-          </Field>
-          <Field label="Avatar (emoji or image URL)">
-            <input className="input" value={form.avatar} onChange={(e) => setForm({ ...form, avatar: e.target.value })} />
-          </Field>
-          <Field label="Base URL (OpenAI-compatible)">
-            <input className="input" value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })} />
-          </Field>
-          <Field label={`API key${keySet ? " (leave blank to keep)" : ""}`}>
-            <input
-              className="input"
-              type="password"
-              value={apiKey}
-              placeholder={keySet ? "••••••" : "sk-…"}
-              onChange={(e) => setApiKey(e.target.value)}
-            />
-          </Field>
-        </div>
-        <Field label="Base system prompt / context">
-          <textarea
-            className="input h-24 resize-y"
-            value={form.system_prompt}
-            placeholder="You are a helpful assistant for this room…"
-            onChange={(e) => setForm({ ...form, system_prompt: e.target.value })}
-          />
-        </Field>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} />
-          Enabled
-        </label>
-        <div className="flex items-center gap-2">
-          <button className="btn btn-primary" onClick={save}>
-            <Save size={16} /> Save
-          </button>
-          {saved && <span className="text-sm text-emerald-400 fade-in">Saved ✓</span>}
         </div>
       </div>
     </div>
@@ -175,6 +63,7 @@ const EMPTY_BOT = {
   base_url: "https://api.openai.com/v1",
   api_key: "",
   model: "gpt-4o-mini",
+  model_type: "standard" as "standard" | "reasoning",
   system_prompt: "",
   trigger: "mention" as const,
   channels: [] as number[],
@@ -185,6 +74,7 @@ function BotsTab() {
   const bots = useStore((s) => s.bots);
   const channels = useStore((s) => s.channels);
   const refreshBots = useStore((s) => s.refreshBots);
+  const refreshAgent = useStore((s) => s.refreshAgent);
   const [form, setForm] = useState({ ...EMPTY_BOT });
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState("");
@@ -193,6 +83,7 @@ function BotsTab() {
     base_url: "",
     api_key: "",
     model: "",
+    model_type: "standard" as "standard" | "reasoning",
     system_prompt: "",
     trigger: "mention" as "mention" | "all",
     channels: [] as number[],
@@ -202,6 +93,12 @@ function BotsTab() {
   useEffect(() => {
     refreshBots();
   }, [refreshBots]);
+
+  async function makeAssistant(bot: Bot) {
+    await api.post(`/api/bots/${bot.id}/assistant`, {});
+    await refreshBots();
+    await refreshAgent();
+  }
 
   async function create() {
     setError("");
@@ -232,6 +129,7 @@ function BotsTab() {
       base_url: bot.base_url,
       api_key: "",
       model: bot.model,
+      model_type: bot.model_type,
       system_prompt: bot.system_prompt,
       trigger: bot.trigger,
       channels: bot.channels,
@@ -249,11 +147,14 @@ function BotsTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-[var(--c-muted)]">
-          Bots are OpenAI-compatible endpoints that reply in channels.
+          Bots are OpenAI-compatible endpoints that reply in channels. The one
+          marked <Star size={12} className="inline -mt-0.5 fill-amber-400 text-amber-400" />{" "}
+          <b>Assistant</b> (the Gardener) also powers private conversations,
+          live-doc completion and kanban fill.
         </p>
-        <button className="btn btn-primary" onClick={() => setShowForm((v) => !v)}>
+        <button className="btn btn-primary shrink-0" onClick={() => setShowForm((v) => !v)}>
           <Plus size={16} /> New bot
         </button>
       </div>
@@ -266,6 +167,12 @@ function BotsTab() {
             </Field>
             <Field label="Model">
               <input className="input" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
+            </Field>
+            <Field label="Model type">
+              <select className="input" value={form.model_type} onChange={(e) => setForm({ ...form, model_type: e.target.value as "standard" | "reasoning" })}>
+                <option value="standard">Standard</option>
+                <option value="reasoning">Reasoning (e.g. gpt-oss, o-series)</option>
+              </select>
             </Field>
             <Field label="Avatar (emoji or image URL)">
               <input className="input" value={form.avatar} onChange={(e) => setForm({ ...form, avatar: e.target.value })} placeholder="🤖" />
@@ -336,12 +243,26 @@ function BotsTab() {
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="font-medium">{b.name}</div>
+                <div className="flex items-center gap-1.5 font-medium">
+                  {b.name}
+                  {b.is_assistant && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-400">
+                      <Star size={10} className="fill-amber-400" /> Assistant
+                    </span>
+                  )}
+                </div>
                 <div className="truncate text-xs text-[var(--c-muted)]">
-                  {b.model} · {b.trigger === "all" ? "every message" : "@mention"} ·{" "}
+                  {b.model}
+                  {b.model_type === "reasoning" ? " (reasoning)" : ""} ·{" "}
+                  {b.trigger === "all" ? "every message" : "@mention"} ·{" "}
                   {b.channels.length ? `${b.channels.length} channel(s)` : "all channels"}
                 </div>
               </div>
+              {!b.is_assistant && (
+                <button className="btn !px-2 text-[var(--c-muted)] hover:text-amber-400" onClick={() => makeAssistant(b)} title="Make this the room Assistant">
+                  <Star size={16} />
+                </button>
+              )}
               <button className={`btn !px-2 ${b.enabled ? "text-emerald-400" : "text-[var(--c-muted)]"}`} onClick={() => toggle(b)} title={b.enabled ? "Enabled" : "Disabled"}>
                 <Power size={16} />
               </button>
@@ -358,6 +279,12 @@ function BotsTab() {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field label="Model">
                     <input className="input" value={editForm.model} onChange={(e) => setEditForm({ ...editForm, model: e.target.value })} />
+                  </Field>
+                  <Field label="Model type">
+                    <select className="input" value={editForm.model_type} onChange={(e) => setEditForm({ ...editForm, model_type: e.target.value as "standard" | "reasoning" })}>
+                      <option value="standard">Standard</option>
+                      <option value="reasoning">Reasoning (e.g. gpt-oss, o-series)</option>
+                    </select>
                   </Field>
                   <Field label="Avatar (emoji or image URL)">
                     <input className="input" value={editForm.avatar} onChange={(e) => setEditForm({ ...editForm, avatar: e.target.value })} />

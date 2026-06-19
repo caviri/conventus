@@ -40,9 +40,6 @@ def author_color(name: str, kind: str) -> str:
         bot = db.query_one("SELECT color FROM bots WHERE name = ?", (name,))
         if bot:
             return bot["color"]
-        agent_row = db.query_one("SELECT color FROM agent WHERE id = 1 AND name = ?", (name,))
-        if agent_row:
-            return agent_row["color"]
     user = db.query_one("SELECT color FROM users WHERE name = ?", (name,))
     return user["color"] if user else "#94a3b8"
 
@@ -52,9 +49,6 @@ def author_avatar(name: str, kind: str) -> Optional[str]:
         bot = db.query_one("SELECT avatar FROM bots WHERE name = ?", (name,))
         if bot:
             return bot["avatar"] or None
-        agent_row = db.query_one("SELECT avatar FROM agent WHERE id = 1 AND name = ?", (name,))
-        if agent_row:
-            return agent_row["avatar"] or None
     user = db.query_one("SELECT avatar FROM users WHERE name = ?", (name,))
     return (user["avatar"] or None) if user else None
 
@@ -155,9 +149,6 @@ def serialize_many(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     users = {u["name"]: u for u in db.query_all("SELECT name, color, avatar FROM users")}
     bots = {b["name"]: b for b in db.query_all("SELECT name, color, avatar FROM bots")}
-    # The Assistant authors bot messages too; treat it like a bot for styling.
-    for a in db.query_all("SELECT name, color, avatar FROM agent WHERE id = 1"):
-        bots.setdefault(a["name"], a)
 
     # Batch-load parents for quote-replies.
     parent_ids = [r["reply_to"] for r in rows if r["reply_to"]]
@@ -366,8 +357,8 @@ async def _post_process(message: dict[str, Any]) -> None:
                 await _broadcast_message(updated, "message.update")
 
     # Avoid bots replying to bots (no infinite loops). Channel-only triggers.
+    # The Assistant is just an is_assistant bot, so this single call covers it.
     if message["kind"] != "bot" and message["channel_id"]:
-        from . import agent, bots  # lazy import to dodge a cycle
+        from . import bots  # lazy import to dodge a cycle
 
         await bots.maybe_reply(message)
-        await agent.maybe_reply_channel(message)

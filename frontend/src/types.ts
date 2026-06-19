@@ -102,12 +102,14 @@ export interface Bot {
   base_url: string;
   api_key: string;
   model: string;
+  model_type: "standard" | "reasoning";
   system_prompt: string;
   trigger: "mention" | "all";
   channels: number[];
   color: string;
   avatar: string;
   enabled: boolean;
+  is_assistant: boolean;
 }
 
 // The room's single configurable Assistant (api_key is masked when read).

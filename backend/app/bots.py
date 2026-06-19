@@ -6,12 +6,20 @@ context and ask the endpoint for a reply, then post it back as a bot message.
 """
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from . import agent, db
 from .ws import hub
 
 CONTEXT_LIMIT = agent.CONTEXT_LIMIT
+
+# Channel "awake" sessions for mention-triggered bots: an @mention wakes the bot
+# in that channel; while awake it follows the whole conversation and replies to
+# every message, the window extending with activity. After SESSION_TTL seconds of
+# silence it sleeps and ignores non-mentions until woken again.
+SESSION_TTL = 300  # 5 minutes
+_awake: dict[tuple[int, int], float] = {}  # (bot_id, channel_id) -> awake-until epoch
 
 
 def _bot_watches(bot: dict[str, Any], channel_id: int) -> bool:
@@ -26,15 +34,22 @@ def _mentioned(text: str, name: str) -> bool:
 
 async def maybe_reply(message: dict[str, Any]) -> None:
     channel_id = message["channel_id"]
+    now = time.time()
     bots = db.query_all("SELECT * FROM bots WHERE enabled = 1")
     for bot in bots:
-        if not _bot_watches(bot, channel_id):
+        if not _bot_watches(bot, channel_id) or message["author"] == bot["name"]:
             continue
-        if bot["trigger"] == "mention" and not _mentioned(
-            message["content"], bot["name"]
-        ):
+        if bot["trigger"] == "all":
+            await _respond(bot, channel_id)
             continue
-        await _respond(bot, channel_id)
+        # mention trigger: respond when addressed, or while an awake session lasts.
+        key = (bot["id"], channel_id)
+        if _mentioned(message["content"], bot["name"]):
+            _awake[key] = now + SESSION_TTL
+            await _respond(bot, channel_id)
+        elif _awake.get(key, 0) > now:
+            _awake[key] = now + SESSION_TTL
+            await _respond(bot, channel_id)
 
 
 def _history(channel_id: int, bot_name: str) -> list[dict[str, str]]:

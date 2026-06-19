@@ -1,9 +1,10 @@
-"""The room Assistant: configuration + one-shot helpers.
+"""The room Assistant: a read endpoint + one-shot helpers.
 
-`GET /api/agent` is readable by any member (so the UI knows the Assistant's name
-and whether it's enabled). Configuration (`PATCH`) is admin-only and the api_key
-is write-only, mirroring the bots router. The `/complete` and `/structured`
-helpers power live-document completion and kanban card fill respectively.
+The Assistant is now just the bot flagged ``is_assistant`` — admins configure it
+in the Bots panel (``/api/bots``). ``GET /api/agent`` stays as a convenience for
+the UI (so it knows the Assistant's name/avatar/enabled state without scanning
+the bot list). The ``/complete``, ``/structured`` and ``/cards`` helpers power
+live-document completion and kanban card fill, all driven by the Assistant bot.
 """
 from __future__ import annotations
 
@@ -12,32 +13,25 @@ import json
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import agent, db
-from ..deps import current_user, require_admin
-from ..ws import hub
+from .. import agent
+from ..deps import current_user
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
 MASK = "•••"
 
 
-class AgentUpdate(BaseModel):
-    name: str | None = None
-    base_url: str | None = None
-    api_key: str | None = None
-    model: str | None = None
-    model_type: str | None = None  # standard | reasoning
-    system_prompt: str | None = None
-    color: str | None = None
-    avatar: str | None = None
-    enabled: bool | None = None
-
-
-def _serialize(row: dict, *, reveal_key: bool = False) -> dict:
+def _serialize(row: dict) -> dict:
+    if not row:
+        return {
+            "name": "", "base_url": "", "api_key": "", "model": "",
+            "model_type": "standard", "system_prompt": "", "color": "#4f9a5b",
+            "avatar": "🌱", "enabled": False,
+        }
     return {
         "name": row["name"],
         "base_url": row["base_url"],
-        "api_key": row["api_key"] if reveal_key else (MASK if row["api_key"] else ""),
+        "api_key": MASK if row["api_key"] else "",
         "model": row["model"],
         "model_type": row["model_type"],
         "system_prompt": row["system_prompt"],
@@ -49,32 +43,7 @@ def _serialize(row: dict, *, reveal_key: bool = False) -> dict:
 
 @router.get("")
 async def get_agent(user=Depends(current_user)):
-    return _serialize(agent.get_config())
-
-
-@router.patch("")
-async def update_agent(req: AgentUpdate, user=Depends(require_admin)):
-    fields: dict[str, object] = {}
-    for key in ("name", "base_url", "model", "system_prompt", "color", "avatar"):
-        val = getattr(req, key)
-        if val is not None:
-            fields[key] = val
-    if req.model_type is not None:
-        if req.model_type not in ("standard", "reasoning"):
-            raise HTTPException(status_code=400, detail="model_type must be 'standard' or 'reasoning'")
-        fields["model_type"] = req.model_type
-    if req.api_key is not None and req.api_key != MASK:
-        fields["api_key"] = req.api_key
-    if req.enabled is not None:
-        fields["enabled"] = 1 if req.enabled else 0
-    if fields:
-        assignments = ", ".join(f"{k} = ?" for k in fields)
-        db.execute(
-            f"UPDATE agent SET {assignments} WHERE id = 1", (*fields.values(),)
-        )
-    # Nudge clients to refresh the roster (the Assistant appears/disappears there).
-    await hub.broadcast("member.update", {"name": agent.get_config().get("name", "")})
-    return _serialize(agent.get_config())
+    return _serialize(agent.get_assistant())
 
 
 # --- one-shot helpers ----------------------------------------------------

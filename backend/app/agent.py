@@ -11,7 +11,6 @@ dependency stays one-directional.
 from __future__ import annotations
 
 import json
-import time
 from typing import Any, AsyncIterator, Callable, Optional
 
 import httpx
@@ -22,11 +21,6 @@ from .ws import hub
 CONTEXT_LIMIT = 20
 STREAM_FLUSH_CHARS = 24  # how many new chars before we push a live update
 
-# Channel "awake" sessions: an @mention wakes the Assistant in a channel; while
-# awake it replies to every message and the window is extended by activity. After
-# SESSION_TTL seconds of silence it sleeps and ignores non-mentions until woken.
-SESSION_TTL = 300  # 5 minutes
-_awake: dict[int, float] = {}  # channel_id -> epoch when the awake window ends
 # Reasoning models (e.g. gpt-oss) spend tokens on an internal trace before the
 # answer; give them ample budget so they don't get cut off with empty content.
 REASONING_MAX_TOKENS = 4096
@@ -39,12 +33,17 @@ def reasoning_budget(config: dict[str, Any]) -> Optional[int]:
 
 # --- config --------------------------------------------------------------
 
-def get_config() -> dict[str, Any]:
-    return db.query_one("SELECT * FROM agent WHERE id = 1") or {}
+def get_assistant() -> dict[str, Any]:
+    """The bot flagged as the room Assistant (the Gardener), or {} if none."""
+    return db.query_one("SELECT * FROM bots WHERE is_assistant = 1") or {}
+
+
+# Backwards-compatible alias — the Assistant config is now an is_assistant bot.
+get_config = get_assistant
 
 
 def is_enabled(config: Optional[dict[str, Any]] = None) -> bool:
-    cfg = config if config is not None else get_config()
+    cfg = config if config is not None else get_assistant()
     return bool(cfg.get("enabled")) and bool(cfg.get("base_url"))
 
 
@@ -204,17 +203,6 @@ def _to_messages(rows: list[dict[str, Any]], agent_name: str) -> list[dict[str, 
     return out
 
 
-def _channel_history(channel_id: int, agent_name: str) -> list[dict[str, str]]:
-    rows = db.query_all(
-        "SELECT author, content FROM messages "
-        "WHERE channel_id = ? AND kind != 'system' AND content != '' "
-        "ORDER BY id DESC LIMIT ?",
-        (channel_id, CONTEXT_LIMIT),
-    )
-    rows.reverse()
-    return _to_messages(rows, agent_name)
-
-
 def _conversation_history(conversation_id: int, agent_name: str) -> list[dict[str, str]]:
     # Context resets at the most recent "new conversation" divider (a system
     # message), so each new segment starts the Assistant fresh.
@@ -234,40 +222,8 @@ def _conversation_history(conversation_id: int, agent_name: str) -> list[dict[st
 
 
 # --- triggers ------------------------------------------------------------
-
-async def maybe_reply_channel(message: dict[str, Any]) -> None:
-    """Reply inline in a channel. An @mention wakes the Assistant; while awake it
-    follows the whole conversation, replying to every message until it sleeps
-    after SESSION_TTL seconds of silence."""
-    cfg = get_config()
-    if not is_enabled(cfg):
-        return
-    name = cfg["name"]
-    if message["author"] == name:
-        return
-    channel_id = message["channel_id"]
-    now = time.time()
-    mentioned = _mentioned(message["content"], name)
-    awake = _awake.get(channel_id, 0) > now
-    if not mentioned and not awake:
-        return  # asleep and not addressed — stay quiet
-    # Woken or kept awake by activity: extend the session window.
-    _awake[channel_id] = now + SESSION_TTL
-    await hub.broadcast("typing", {"name": name, "channel_id": channel_id})
-
-    msgs: list[dict[str, str]] = []
-    if cfg["system_prompt"]:
-        msgs.append({"role": "system", "content": cfg["system_prompt"]})
-    msgs.extend(_channel_history(channel_id, name))
-
-    def make_blank() -> int:
-        return db.execute(
-            "INSERT INTO messages(channel_id, author, kind, content, created_at) "
-            "VALUES (?, ?, 'bot', '', ?)",
-            (channel_id, name, db.now()),
-        )
-
-    await stream_reply(cfg, msgs, make_blank)
+# Channel replies (including the Assistant's @mention + awake sessions) are
+# handled uniformly for every bot in ``bots.maybe_reply``.
 
 
 async def reply_in_conversation(conversation_id: int) -> None:
@@ -275,7 +231,7 @@ async def reply_in_conversation(conversation_id: int) -> None:
     convo = db.query_one("SELECT * FROM conversations WHERE id = ?", (conversation_id,))
     if not convo:
         return
-    cfg = get_config()
+    cfg = get_assistant()
     name = cfg.get("name", "Assistant")
 
     if not is_enabled(cfg):
