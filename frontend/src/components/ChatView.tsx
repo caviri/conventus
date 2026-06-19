@@ -6,7 +6,7 @@ import Composer from "./Composer";
 import type { Message as MessageType } from "../types";
 import EmptyState from "./EmptyState";
 import { formatDate } from "../format";
-import { Hash, Circle, Pencil, Pin, X, ArrowDown, Trash2, Sparkles } from "lucide-react";
+import { Hash, Circle, Pencil, Pin, X, ArrowDown, Trash2, Sparkles, ListTree, CornerDownRight, ChevronDown } from "lucide-react";
 
 function DateDivider({ ts }: { ts: number }) {
   return (
@@ -42,9 +42,47 @@ export default function ChatView() {
   const [scrolled, setScrolled] = useState(false);
   const atBottom = useRef(true);
   const prevLen = useRef(0);
+  // Threads render inline under their root message. `expandAll` opens every
+  // thread at once (the "not like Slack" mode); `threadOverride` lets a single
+  // thread be toggled against that default.
+  const [expandAll, setExpandAll] = useState(false);
+  const [threadOverride, setThreadOverride] = useState<Record<number, boolean>>({});
+  const isThreadOpen = (id: number) =>
+    id in threadOverride ? threadOverride[id] : expandAll;
+  const toggleThread = (id: number) =>
+    setThreadOverride((o) => ({ ...o, [id]: !isThreadOpen(id) }));
+  const toggleAllThreads = () => {
+    setExpandAll((v) => !v);
+    setThreadOverride({});
+  };
 
   const key = viewKey(view);
   const list = messages[key] || [];
+
+  // Group replies under the root of their reply chain. Roots stay in the main
+  // timeline; replies are pulled out and rendered indented beneath their root.
+  const byId = new Map(list.map((m) => [m.id, m]));
+  const rootIdOf = (m: MessageType): number => {
+    let cur = m;
+    const seen = new Set<number>();
+    while (cur.reply_to && byId.has(cur.reply_to) && !seen.has(cur.id)) {
+      seen.add(cur.id);
+      cur = byId.get(cur.reply_to)!;
+    }
+    return cur.id;
+  };
+  const threadReplies = new Map<number, MessageType[]>();
+  const roots: MessageType[] = [];
+  for (const m of list) {
+    const rid = rootIdOf(m);
+    if (rid === m.id) roots.push(m);
+    else {
+      const arr = threadReplies.get(rid) || [];
+      arr.push(m);
+      threadReplies.set(rid, arr);
+    }
+  }
+  const hasThreads = threadReplies.size > 0;
 
   const channel =
     view.type === "channel" ? channels.find((c) => c.id === view.id) : undefined;
@@ -234,6 +272,15 @@ export default function ChatView() {
         ) : null}
 
         <div className="ml-auto flex items-center gap-1">
+          {hasThreads && (
+            <button
+              className={`btn !py-1.5 text-xs ${expandAll ? "btn-primary" : ""}`}
+              onClick={toggleAllThreads}
+              title={expandAll ? "Collapse all threads" : "Open every thread inline"}
+            >
+              <ListTree size={14} /> {expandAll ? "Threads open" : "Threads"}
+            </button>
+          )}
           {channel && pins.length > 0 && (
             <button
               className="btn !py-1.5 text-xs"
@@ -314,8 +361,8 @@ export default function ChatView() {
             }
           />
         )}
-        {list.map((m, i) => {
-          const prev = list[i - 1];
+        {roots.map((m, i) => {
+          const prev = roots[i - 1];
           const sameDay =
             !!prev &&
             new Date(prev.created_at * 1000).toDateString() ===
@@ -327,10 +374,48 @@ export default function ChatView() {
             prev.kind === m.kind &&
             !m.reply_to &&
             m.created_at - prev.created_at < 300;
+          const replies = threadReplies.get(m.id);
+          const open = isThreadOpen(m.id);
+          const last = replies && replies[replies.length - 1];
           return (
             <Fragment key={m.id}>
               {!sameDay && <DateDivider ts={m.created_at} />}
               <Message message={m} grouped={grouped} />
+              {replies && replies.length > 0 && (
+                <div className="ml-12 mt-0.5">
+                  {!open ? (
+                    // Collapsed: a thin log line standing in for the sub-thread.
+                    <button
+                      onClick={() => toggleThread(m.id)}
+                      className="flex items-center gap-2 rounded px-2 py-1 text-xs text-[var(--c-muted)] transition hover:text-[var(--c-text)]"
+                    >
+                      <CornerDownRight size={13} className="shrink-0" />
+                      <span className="font-medium text-[var(--c-accent)]">
+                        {replies.length} {replies.length === 1 ? "reply" : "replies"}
+                      </span>
+                      {last && <span className="opacity-70">last from {last.author}</span>}
+                    </button>
+                  ) : (
+                    <div className="border-l-2 border-[var(--c-accent-soft)] pl-1">
+                      <button
+                        onClick={() => toggleThread(m.id)}
+                        className="flex items-center gap-1.5 px-3 py-1 text-[10px] uppercase tracking-wide text-[var(--c-muted)] hover:text-[var(--c-text)]"
+                      >
+                        <ChevronDown size={12} /> Thread · {replies.length}
+                      </button>
+                      {replies.map((r, ri) => {
+                        const rprev = replies[ri - 1];
+                        const rgrouped =
+                          !!rprev &&
+                          rprev.author === r.author &&
+                          rprev.kind === r.kind &&
+                          r.created_at - rprev.created_at < 300;
+                        return <Message key={r.id} message={r} grouped={rgrouped} />;
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </Fragment>
           );
         })}
