@@ -131,6 +131,7 @@ export const useStore = create<State>((set, get) => ({
         get().refreshMembers(),
         get().refreshBoards(),
         get().refreshFolders(),
+        get().refreshBots(),
       ]);
       const first = get().channels[0];
       if (first) await get().setView({ type: "channel", id: first.id });

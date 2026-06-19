@@ -6,7 +6,9 @@ import { matchCommands, runCommand, type CommandContext } from "../commands";
 import MediaCapture from "./MediaCapture";
 import type { FileItem, View } from "../types";
 import { formatBytes } from "../format";
-import { Paperclip, SendHorizontal, X, Loader2, Code2 } from "lucide-react";
+import { Paperclip, SendHorizontal, X, Loader2, Code2, Hash } from "lucide-react";
+
+type TagItem = { sigil: "@" | "#"; name: string; color?: string; sub?: string };
 
 export default function Composer({
   view,
@@ -22,14 +24,17 @@ export default function Composer({
   const [widgetMode, setWidgetMode] = useState(false);
   const [paletteIndex, setPaletteIndex] = useState(0);
   const [paletteClosed, setPaletteClosed] = useState(false);
-  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
-  const [mentionIndex, setMentionIndex] = useState(0);
+  // Tag autocomplete: "@" people/bots, "#" channels.
+  const [tag, setTag] = useState<{ sigil: "@" | "#"; query: string } | null>(null);
+  const [tagIndex, setTagIndex] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const lastTyping = useRef(0);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   const user = useStore((s) => s.user);
   const members = useStore((s) => s.members);
+  const channels = useStore((s) => s.channels);
+  const bots = useStore((s) => s.bots);
   const openDm = useStore((s) => s.openDm);
   const refreshChannels = useStore((s) => s.refreshChannels);
   const addLocalMessage = useStore((s) => s.addLocalMessage);
@@ -50,21 +55,41 @@ export default function Composer({
   );
   const showPalette = !widgetMode && !paletteClosed && matches.length > 0;
 
-  // @-mention autocomplete: people (and the Assistant) matching the @token at
-  // the caret. The Assistant is part of the member roster, so it's included.
-  const mentionMatches = useMemo(() => {
-    if (mentionQuery === null) return [];
-    const q = mentionQuery.toLowerCase();
-    return members
-      .filter((m) => m.name.toLowerCase().includes(q))
-      .sort((a, b) => {
-        const aStart = a.name.toLowerCase().startsWith(q) ? 0 : 1;
-        const bStart = b.name.toLowerCase().startsWith(q) ? 0 : 1;
-        return aStart - bStart || a.name.localeCompare(b.name);
-      })
-      .slice(0, 6);
-  }, [mentionQuery, members]);
-  const showMentions = !widgetMode && mentionMatches.length > 0;
+  // Tag autocomplete candidates: "@" matches people (incl. the Assistant) and
+  // enabled bots; "#" matches channels. Filtered by the token at the caret.
+  const tagMatches = useMemo<TagItem[]>(() => {
+    if (!tag) return [];
+    const q = tag.query.toLowerCase();
+    const rank = (name: string) =>
+      [name.toLowerCase().startsWith(q) ? 0 : 1, name.toLowerCase()] as const;
+    const byRank = (a: TagItem, b: TagItem) => {
+      const [ar, an] = rank(a.name);
+      const [br, bn] = rank(b.name);
+      return ar - br || an.localeCompare(bn);
+    };
+    if (tag.sigil === "#") {
+      return channels
+        .filter((c) => c.name.toLowerCase().includes(q))
+        .map((c) => ({ sigil: "#" as const, name: c.name, sub: c.topic || undefined }))
+        .sort(byRank)
+        .slice(0, 6);
+    }
+    const seen = new Set<string>();
+    const items: TagItem[] = members.map((m) => {
+      seen.add(m.name.toLowerCase());
+      return {
+        sigil: "@" as const,
+        name: m.name,
+        color: m.color,
+        sub: m.is_agent ? "assistant" : m.status || undefined,
+      };
+    });
+    for (const b of bots)
+      if (b.enabled && !seen.has(b.name.toLowerCase()))
+        items.push({ sigil: "@", name: b.name, color: b.color, sub: "bot" });
+    return items.filter((it) => it.name.toLowerCase().includes(q)).sort(byRank).slice(0, 6);
+  }, [tag, members, channels, bots]);
+  const showTags = !widgetMode && tagMatches.length > 0;
 
   function makeCtx(): CommandContext {
     return {
@@ -86,16 +111,18 @@ export default function Composer({
     taRef.current?.focus();
   }
 
-  // Replace the half-typed "@query" before the caret with "@name ".
-  function completeMention(name: string) {
+  // Replace the half-typed "@query" / "#query" before the caret with the pick.
+  function completeTag(item: TagItem) {
     const ta = taRef.current;
     if (!ta) return;
     const pos = ta.selectionStart ?? text.length;
-    const before = text.slice(0, pos).replace(/@([^\s@]*)$/, `@${name} `);
+    const before = text
+      .slice(0, pos)
+      .replace(/([@#])([^\s@#]*)$/, `${item.sigil}${item.name} `);
     const after = text.slice(pos);
     const next = before + after;
     setText(next);
-    setMentionQuery(null);
+    setTag(null);
     requestAnimationFrame(() => {
       ta.focus();
       ta.selectionStart = ta.selectionEnd = before.length;
@@ -195,25 +222,25 @@ export default function Composer({
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
-    if (showMentions) {
+    if (showTags) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setMentionIndex((i) => (i + 1) % mentionMatches.length);
+        setTagIndex((i) => (i + 1) % tagMatches.length);
         return;
       }
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        setMentionIndex((i) => (i - 1 + mentionMatches.length) % mentionMatches.length);
+        setTagIndex((i) => (i - 1 + tagMatches.length) % tagMatches.length);
         return;
       }
       if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
         e.preventDefault();
-        completeMention(mentionMatches[Math.min(mentionIndex, mentionMatches.length - 1)].name);
+        completeTag(tagMatches[Math.min(tagIndex, tagMatches.length - 1)]);
         return;
       }
       if (e.key === "Escape") {
         e.preventDefault();
-        setMentionQuery(null);
+        setTag(null);
         return;
       }
     }
@@ -250,11 +277,11 @@ export default function Composer({
     setPaletteIndex(0);
     setPaletteClosed(false);
     const ta = e.target;
-    // Detect an @mention being typed at the caret (start or after whitespace).
+    // Detect an @mention or #channel tag being typed at the caret.
     const pos = ta.selectionStart ?? ta.value.length;
-    const m = ta.value.slice(0, pos).match(/(?:^|\s)@([^\s@]*)$/);
-    setMentionQuery(m ? m[1] : null);
-    setMentionIndex(0);
+    const m = ta.value.slice(0, pos).match(/(?:^|\s)([@#])([^\s@#]*)$/);
+    setTag(m ? { sigil: m[1] as "@" | "#", query: m[2] } : null);
+    setTagIndex(0);
     ta.style.height = "auto";
     ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
     const now = Date.now();
@@ -308,31 +335,41 @@ export default function Composer({
           ))}
         </div>
       )}
-      {showMentions && (
+      {showTags && (
         <div className="card mb-2 overflow-hidden p-1 fade-in">
           <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--c-muted)]">
-            Mention — ↑/↓ to navigate, Tab to insert
+            {tag?.sigil === "#" ? "Channel" : "Mention"} — ↑/↓ to navigate, Tab to insert
           </div>
-          {mentionMatches.map((m, i) => (
+          {tagMatches.map((m, i) => (
             <button
-              key={m.name}
-              onMouseEnter={() => setMentionIndex(i)}
-              onClick={() => completeMention(m.name)}
+              key={m.sigil + m.name}
+              onMouseEnter={() => setTagIndex(i)}
+              onClick={() => completeTag(m)}
               className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm ${
-                i === mentionIndex ? "bg-[var(--c-accent-soft)]" : "hover:bg-[var(--c-elevated)]"
+                i === tagIndex ? "bg-[var(--c-accent-soft)]" : "hover:bg-[var(--c-elevated)]"
               }`}
             >
-              <span
-                className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ background: m.color }}
-              />
-              <span className="font-medium">@{m.name}</span>
-              {m.is_agent && (
-                <span className="text-xs text-[var(--c-accent)]">assistant</span>
+              {m.sigil === "#" ? (
+                <Hash size={13} className="shrink-0 text-[var(--c-muted)]" />
+              ) : (
+                <span
+                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ background: m.color }}
+                />
               )}
-              {m.status && (
-                <span className="ml-auto truncate pl-3 text-xs text-[var(--c-muted)]">
-                  {m.status}
+              <span className="font-medium">
+                {m.sigil}
+                {m.name}
+              </span>
+              {m.sub && (
+                <span
+                  className={`ml-auto truncate pl-3 text-xs ${
+                    m.sub === "assistant" || m.sub === "bot"
+                      ? "text-[var(--c-accent)]"
+                      : "text-[var(--c-muted)]"
+                  }`}
+                >
+                  {m.sub}
                 </span>
               )}
             </button>
