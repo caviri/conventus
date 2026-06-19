@@ -7,24 +7,8 @@ import Attachment from "./Attachment";
 import LinkPreview from "./LinkPreview";
 import HtmlWidget from "./HtmlWidget";
 import CodeBlock from "./CodeBlock";
-import { Bot, SmilePlus, Pencil, Trash2, Check, X, Reply, CornerUpRight, Pin, Link2 } from "lucide-react";
-
-function Avatar({
-  kind,
-  avatar,
-  initial,
-}: {
-  kind: string;
-  avatar: string | null;
-  initial: string;
-}) {
-  if (avatar && /^https?:\/\//.test(avatar)) {
-    return <img src={avatar} alt="" className="h-9 w-9 rounded-lg object-cover" />;
-  }
-  if (avatar) return <span className="text-xl">{avatar}</span>;
-  if (kind === "bot") return <Bot size={18} />;
-  return <>{initial}</>;
-}
+import Avatar from "./Avatar";
+import { SmilePlus, Pencil, Trash2, Check, X, Reply, CornerUpRight, Pin, Link2 } from "lucide-react";
 
 const QUICK_EMOJI = ["👍", "❤️", "😂", "🎉", "🚀", "👀", "✅", "🔥"];
 
@@ -58,7 +42,6 @@ function MessageRow({
   const mine = message.author === user?.name;
   const canEdit = mine && message.kind !== "bot";
   const canDelete = mine || user?.is_admin;
-  const initial = message.author.charAt(0).toUpperCase();
 
   async function react(emoji: string) {
     setPicker(false);
@@ -181,14 +164,7 @@ function MessageRow({
 
       <div className="w-9 shrink-0">
         {!grouped && (
-          <div
-            className="grid h-9 w-9 place-items-center overflow-hidden rounded-lg text-sm font-semibold text-white"
-            style={{
-              background: message.avatar ? "transparent" : message.color,
-            }}
-          >
-            <Avatar kind={message.kind} avatar={message.avatar} initial={initial} />
-          </div>
+          <Avatar avatar={message.avatar} name={message.author} color={message.color} className="h-9 w-9" />
         )}
       </div>
 

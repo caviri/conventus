@@ -3,6 +3,7 @@ import { useStore, viewKey } from "../store";
 import { api } from "../api";
 import Message from "./Message";
 import Composer from "./Composer";
+import Avatar from "./Avatar";
 import type { Message as MessageType } from "../types";
 import EmptyState from "./EmptyState";
 import { formatDate } from "../format";
@@ -252,12 +253,14 @@ export default function ChatView() {
           </>
         ) : conv ? (
           <>
-            <span
-              className="grid h-7 w-7 place-items-center rounded-full text-sm"
-              style={{ background: agent?.color || "#8b5cf6" }}
-            >
-              {agent?.avatar || "✨"}
-            </span>
+            <Avatar
+              avatar={agent?.avatar}
+              name={agent?.name || "Assistant"}
+              color={agent?.color || "#8b5cf6"}
+              className="h-7 w-7"
+              rounded="rounded-full"
+              emojiClass="text-sm"
+            />
             <button
               onClick={renameConv}
               title="Rename conversation"
