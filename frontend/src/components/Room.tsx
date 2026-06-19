@@ -90,15 +90,16 @@ export default function Room({
   const [showComp, setShowComp] = useState(false);
   const [frameKb, setFrameKb] = useState<number | null>(null);
   const [format, setFormat] = useState<"webp" | "jpeg">(WEBP_OK ? "webp" : "jpeg");
-  const [enlarged, setEnlarged] = useState<Set<string>>(new Set());
+  // Per-participant display scale (x1 … x5) and a live kbps readout.
+  const [scales, setScales] = useState<Record<string, number>>({});
+  const [rates, setRates] = useState<Record<string, number>>({});
+  const bytesRef = useRef<Record<string, number>>({});
 
-  function toggleEnlarged(who: string) {
-    setEnlarged((prev) => {
-      const next = new Set(prev);
-      if (next.has(who)) next.delete(who);
-      else next.add(who);
-      return next;
-    });
+  function setScale(who: string, s: number) {
+    setScales((prev) => ({ ...prev, [who]: s }));
+  }
+  function countBytes(who: string, n: number) {
+    bytesRef.current[who] = (bytesRef.current[who] || 0) + n;
   }
   // Latest received video frame per sender, as object URLs (remote tiles).
   const [videoFrames, setVideoFrames] = useState<Record<string, string>>({});
@@ -136,6 +137,7 @@ export default function Room({
     out[0] = kind;
     out.set(new Uint8Array(bytes), 1);
     ws.send(out.buffer);
+    if (user?.name) countBytes(user.name, out.byteLength);
   }
 
   function showVideoFrame(sender: string, frame: ArrayBuffer) {
@@ -209,6 +211,7 @@ export default function Room({
       const sender = new TextDecoder().decode(buf.subarray(1, 1 + nameLen));
       const kind = buf[1 + nameLen];
       const payload = data.slice(1 + nameLen + 1);
+      countBytes(sender, data.byteLength);
       if (kind === KIND_VIDEO) showVideoFrame(sender, payload);
       else playClip(sender, payload);
     };
@@ -366,7 +369,9 @@ export default function Room({
     setTalking(new Set());
     setTransmitting(false);
     setCameraOn(false);
-    setEnlarged(new Set());
+    setScales({});
+    setRates({});
+    bytesRef.current = {};
     setVideoFrames((prev) => {
       Object.values(prev).forEach((u) => URL.revokeObjectURL(u));
       return {};
@@ -422,32 +427,118 @@ export default function Room({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [joined]);
 
+  // Roll up bytes/second into a kbps readout per participant (in + out).
+  useEffect(() => {
+    if (!joined) return;
+    const id = window.setInterval(() => {
+      const acc = bytesRef.current;
+      bytesRef.current = {};
+      const next: Record<string, number> = {};
+      for (const k of Object.keys(acc)) next[k] = Math.round((acc[k] * 8) / 1000);
+      setRates(next);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [joined]);
+
   // Tear down on unmount / when switching boards.
   useEffect(() => () => cleanup(), []);
 
   return (
     <div className="flex h-full flex-col">
-      <header className="surface flex items-center gap-3 border-b border-[var(--c-border)] px-4 py-3 pl-14 md:pl-4">
+      <header className="surface relative flex items-center gap-3 border-b border-[var(--c-border)] px-4 py-3 pl-14 md:pl-4">
         <Radio size={18} className="text-[var(--c-muted)]" />
         <div className="font-semibold">{title}</div>
         <BoardActions id={id} name={title} />
         {joined && (
-          <button className="btn ml-auto !py-1.5 text-xs text-red-300" onClick={leave}>
-            <PhoneOff size={14} /> Leave
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              className={`btn !py-1.5 text-xs ${cameraOn ? "btn-primary" : ""}`}
+              onClick={() => (cameraOn ? stopCamera() : startCamera())}
+            >
+              {cameraOn ? <VideoOff size={14} /> : <Video size={14} />}
+              <span className="hidden sm:inline">{cameraOn ? "Stop camera" : "Start camera"}</span>
+            </button>
+            <button
+              className={`btn !py-1.5 text-xs ${showComp ? "btn-primary" : ""}`}
+              onClick={() => setShowComp((v) => !v)}
+              title="Compression settings"
+            >
+              <SlidersHorizontal size={14} />
+              <span className="hidden sm:inline">Compression</span>
+            </button>
+            <button className="btn !py-1.5 text-xs text-red-300" onClick={leave}>
+              <PhoneOff size={14} /> Leave
+            </button>
+          </div>
+        )}
+        {joined && showComp && (
+          <>
+            <div className="fixed inset-0 z-30" onClick={() => setShowComp(false)} />
+            <div className="card absolute right-3 top-full z-40 mt-1 flex w-72 max-w-[calc(100vw-1.5rem)] flex-col gap-3 p-3 text-sm shadow-2xl fade-in">
+              <p className="text-xs text-[var(--c-muted)]">
+                Tunes <em>your</em> outgoing video. Lower = lighter on the network.
+              </p>
+              <label className="flex items-center justify-between gap-3">
+                <span>Resolution</span>
+                <select className="input !w-auto !py-1 text-xs" value={resIdx} onChange={(e) => setResIdx(Number(e.target.value))}>
+                  {RES_PRESETS.map((r, i) => (
+                    <option key={r.label} value={i}>{r.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex items-center justify-between gap-3">
+                <span>Frame rate</span>
+                <select className="input !w-auto !py-1 text-xs" value={fps} onChange={(e) => setFps(Number(e.target.value))}>
+                  {FPS_PRESETS.map((f) => (
+                    <option key={f} value={f}>{f} fps</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex items-center justify-between gap-3">
+                <span>Quality</span>
+                <span className="flex items-center gap-2">
+                  <input type="range" min={0.2} max={0.9} step={0.1} value={quality} onChange={(e) => setQuality(Number(e.target.value))} />
+                  <span className="w-8 text-right text-xs text-[var(--c-muted)]">{Math.round(quality * 100)}%</span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-center justify-between gap-3">
+                <span>Dither (duotone)</span>
+                <input type="checkbox" checked={dither} onChange={(e) => setDither(e.target.checked)} />
+              </label>
+              <label className="flex items-center justify-between gap-3">
+                <span>Codec</span>
+                <select className="input !w-auto !py-1 text-xs" value={format} onChange={(e) => setFormat(e.target.value as "webp" | "jpeg")}>
+                  {WEBP_OK && <option value="webp">WebP (smaller)</option>}
+                  <option value="jpeg">JPEG</option>
+                </select>
+              </label>
+              <div className="mt-1 border-t border-[var(--c-border)] pt-2 text-xs text-[var(--c-muted)]">
+                {frameKb != null ? (
+                  <>
+                    ≈ <span className="text-[var(--c-text)]">{frameKb.toFixed(1)} KB</span>/frame ·{" "}
+                    <span className="text-[var(--c-text)]">{Math.round(frameKb * 8 * fps)} kbps</span> up
+                  </>
+                ) : cameraOn ? (
+                  "measuring…"
+                ) : (
+                  "start the camera to see your upstream rate"
+                )}
+              </div>
+            </div>
+          </>
         )}
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 p-6">
+      <div className="flex min-h-0 flex-1 flex-col p-4">
         {!joined ? (
-          <div className="flex flex-col items-center gap-3 text-center">
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
             <Radio size={40} className="text-[var(--c-accent)]" />
             <h2 className="font-display text-xl font-semibold">{title}</h2>
             <p className="max-w-sm text-sm text-[var(--c-muted)]">
               A walkie-talkie call room — hold to talk, release to send. Audio is
               compressed in your browser and relayed to whoever's here. You can
               also switch on your camera for a low-fi dithered video feed, and
-              click any feed to enlarge it.
+              resize any tile individually.
             </p>
             <button className="btn btn-primary" onClick={join} disabled={joining}>
               {joining ? <Loader2 size={16} className="animate-spin" /> : <Mic size={16} />}
@@ -457,10 +548,10 @@ export default function Room({
           </div>
         ) : (
           <>
-            {/* Participants */}
-            <div className="flex flex-wrap items-center justify-center gap-3">
+            {/* Masonry of participants, growing out from the centre */}
+            <div className="flex flex-1 flex-wrap content-center items-start justify-center gap-3 overflow-y-auto p-2">
               {participants.length === 0 && (
-                <span className="text-sm text-[var(--c-muted)]">Just you so far…</span>
+                <span className="self-center text-sm text-[var(--c-muted)]">Just you so far…</span>
               )}
               {participants.map((p) => {
                 const isTalking = talking.has(p) || (p === user?.name && transmitting);
@@ -468,196 +559,112 @@ export default function Room({
                 const hasLocalCam = isMe && cameraOn;
                 const remoteFrame = !isMe ? videoFrames[p] : undefined;
                 const hasVideo = hasLocalCam || !!remoteFrame;
+                const scale = scales[p] || 1;
+                const avSize = 48 * scale;
                 return (
                   <div
                     key={p}
-                    className={`flex flex-col items-center gap-1.5 rounded-xl border px-4 py-3 transition ${
+                    className={`group flex flex-col items-center gap-1.5 rounded-xl border px-3 py-3 transition ${
                       isTalking
                         ? "border-[var(--c-accent)] bg-[var(--c-accent-soft)]"
                         : "border-[var(--c-border)]"
                     }`}
                   >
                     {hasVideo ? (
-                      <button
-                        onClick={() => toggleEnlarged(p)}
-                        title={enlarged.has(p) ? "Shrink" : "Enlarge"}
+                      <div
                         className={`overflow-hidden rounded-lg transition ${
                           isTalking ? "ring-2 ring-[var(--c-accent)]" : ""
                         }`}
+                        style={{ width: 128 * scale, height: 96 * scale }}
                       >
                         {hasLocalCam ? (
                           <canvas
                             ref={localCanvasRef}
                             width={RES_PRESETS[resIdx].w}
                             height={RES_PRESETS[resIdx].h}
-                            className={`-scale-x-100 object-cover transition-all ${
-                              enlarged.has(p) ? "h-64 w-80 sm:h-80 sm:w-[26rem]" : "h-24 w-32"
-                            }`}
+                            className="h-full w-full -scale-x-100 object-cover"
                           />
                         ) : (
-                          <img
-                            src={remoteFrame}
-                            alt=""
-                            className={`object-cover transition-all ${
-                              enlarged.has(p) ? "h-64 w-80 sm:h-80 sm:w-[26rem]" : "h-24 w-32"
-                            }`}
-                          />
+                          <img src={remoteFrame} alt="" className="h-full w-full object-cover" />
                         )}
-                      </button>
+                      </div>
                     ) : (
                       <div
-                        className={`grid h-12 w-12 place-items-center rounded-full text-lg font-semibold text-white transition ${
+                        className={`grid place-items-center rounded-full font-semibold text-white transition ${
                           isTalking ? "ring-2 ring-[var(--c-accent)] ring-offset-2 ring-offset-[var(--c-bg)]" : ""
                         }`}
-                        style={{ background: "#64748b" }}
+                        style={{ width: avSize, height: avSize, fontSize: Math.round(avSize * 0.4), background: "#64748b" }}
                       >
                         {p.charAt(0).toUpperCase()}
                       </div>
                     )}
-                    <span className="flex items-center gap-1 text-xs">
+                    <span className="text-xs">
                       {p}
                       {isMe && " (you)"}
                     </span>
-                    {hasVideo ? (
-                      // With the camera on, talk state is a small mic under the person.
-                      <Mic
-                        size={14}
-                        className={isTalking ? "text-[var(--c-accent)]" : "text-[var(--c-muted)] opacity-50"}
-                      />
-                    ) : (
-                      <span className="h-3 text-[10px] text-[var(--c-accent)]">
-                        {isTalking ? "🔊 talking" : ""}
-                      </span>
-                    )}
+                    <div className="flex h-4 items-center gap-1.5">
+                      {hasVideo ? (
+                        <Mic
+                          size={13}
+                          className={isTalking ? "text-[var(--c-accent)]" : "text-[var(--c-muted)] opacity-50"}
+                        />
+                      ) : isTalking ? (
+                        <span className="text-[10px] text-[var(--c-accent)]">🔊 talking</span>
+                      ) : null}
+                      {rates[p] ? (
+                        <span className="text-[10px] text-[var(--c-muted)]">{rates[p]} kbps</span>
+                      ) : null}
+                    </div>
+                    {/* Per-tile size — revealed on hover */}
+                    <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
+                      {[1, 1.5, 2, 3, 5].map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => setScale(p, s)}
+                          className={`rounded px-1.5 py-0.5 text-[10px] ${
+                            scale === s
+                              ? "bg-[var(--c-accent)] text-white"
+                              : "bg-[var(--c-elevated)] text-[var(--c-muted)] hover:text-[var(--c-text)]"
+                          }`}
+                        >
+                          {s}×
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 );
               })}
             </div>
 
             {/* Push to talk */}
-            <button
-              className={`grid h-36 w-36 select-none place-items-center rounded-full text-sm font-semibold transition ${
-                transmitting
-                  ? "scale-105 bg-[var(--c-accent)] text-white shadow-xl"
-                  : "bg-[var(--c-elevated)] text-[var(--c-text)] hover:bg-[var(--c-surface-2)]"
-              }`}
-              onMouseDown={startTalk}
-              onMouseUp={stopTalk}
-              onMouseLeave={stopTalk}
-              onTouchStart={(e) => {
-                e.preventDefault();
-                startTalk();
-              }}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                stopTalk();
-              }}
-              onContextMenu={(e) => e.preventDefault()}
-            >
-              <div className="flex flex-col items-center gap-1">
-                <Mic size={32} />
-                {transmitting ? "On air" : "Hold to talk"}
-              </div>
-            </button>
-            <p className="text-xs text-[var(--c-muted)]">Hold the button or the spacebar.</p>
-
-            {/* Camera controls */}
-            <div className="flex flex-col items-center gap-2">
-              <div className="flex items-center gap-2">
-                <button
-                  className={`btn ${cameraOn ? "btn-primary" : ""}`}
-                  onClick={() => (cameraOn ? stopCamera() : startCamera())}
-                >
-                  {cameraOn ? <VideoOff size={16} /> : <Video size={16} />}
-                  {cameraOn ? "Stop camera" : "Start camera"}
-                </button>
-                <button
-                  className={`btn ${showComp ? "btn-primary" : ""}`}
-                  onClick={() => setShowComp((v) => !v)}
-                  title="Compression settings"
-                >
-                  <SlidersHorizontal size={16} /> Compression
-                </button>
-              </div>
-
-              {showComp && (
-                <div className="card flex flex-col gap-3 p-3 text-sm fade-in" style={{ minWidth: "16rem" }}>
-                  <p className="text-xs text-[var(--c-muted)]">
-                    Tunes <em>your</em> outgoing video. Lower = lighter on the network.
-                  </p>
-                  <label className="flex items-center justify-between gap-3">
-                    <span>Resolution</span>
-                    <select
-                      className="input !w-auto !py-1 text-xs"
-                      value={resIdx}
-                      onChange={(e) => setResIdx(Number(e.target.value))}
-                    >
-                      {RES_PRESETS.map((r, i) => (
-                        <option key={r.label} value={i}>{r.label}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="flex items-center justify-between gap-3">
-                    <span>Frame rate</span>
-                    <select
-                      className="input !w-auto !py-1 text-xs"
-                      value={fps}
-                      onChange={(e) => setFps(Number(e.target.value))}
-                    >
-                      {FPS_PRESETS.map((f) => (
-                        <option key={f} value={f}>{f} fps</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="flex items-center justify-between gap-3">
-                    <span>Quality</span>
-                    <span className="flex items-center gap-2">
-                      <input
-                        type="range"
-                        min={0.2}
-                        max={0.9}
-                        step={0.1}
-                        value={quality}
-                        onChange={(e) => setQuality(Number(e.target.value))}
-                      />
-                      <span className="w-8 text-right text-xs text-[var(--c-muted)]">
-                        {Math.round(quality * 100)}%
-                      </span>
-                    </span>
-                  </label>
-                  <label className="flex cursor-pointer items-center justify-between gap-3">
-                    <span>Dither (duotone)</span>
-                    <input
-                      type="checkbox"
-                      checked={dither}
-                      onChange={(e) => setDither(e.target.checked)}
-                    />
-                  </label>
-                  <label className="flex items-center justify-between gap-3">
-                    <span>Codec</span>
-                    <select
-                      className="input !w-auto !py-1 text-xs"
-                      value={format}
-                      onChange={(e) => setFormat(e.target.value as "webp" | "jpeg")}
-                    >
-                      {WEBP_OK && <option value="webp">WebP (smaller)</option>}
-                      <option value="jpeg">JPEG</option>
-                    </select>
-                  </label>
-                  <div className="mt-1 border-t border-[var(--c-border)] pt-2 text-xs text-[var(--c-muted)]">
-                    {frameKb != null ? (
-                      <>
-                        ≈ <span className="text-[var(--c-text)]">{frameKb.toFixed(1)} KB</span>/frame ·{" "}
-                        <span className="text-[var(--c-text)]">{Math.round(frameKb * 8 * fps)} kbps</span> up
-                      </>
-                    ) : cameraOn ? (
-                      "measuring…"
-                    ) : (
-                      "start the camera to see your upstream rate"
-                    )}
-                  </div>
+            <div className="flex shrink-0 flex-col items-center gap-1.5 pt-2">
+              <button
+                className={`grid h-28 w-28 select-none place-items-center rounded-full text-sm font-semibold transition ${
+                  transmitting
+                    ? "scale-105 bg-[var(--c-accent)] text-white shadow-xl"
+                    : "bg-[var(--c-elevated)] text-[var(--c-text)] hover:bg-[var(--c-surface-2)]"
+                }`}
+                onMouseDown={startTalk}
+                onMouseUp={stopTalk}
+                onMouseLeave={stopTalk}
+                onTouchStart={(e) => {
+                  e.preventDefault();
+                  startTalk();
+                }}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  stopTalk();
+                }}
+                onContextMenu={(e) => e.preventDefault()}
+              >
+                <div className="flex flex-col items-center gap-1">
+                  <Mic size={28} />
+                  {transmitting ? "On air" : "Hold to talk"}
                 </div>
-              )}
+              </button>
+              <p className="text-xs text-[var(--c-muted)]">
+                Hold the button or the spacebar · hover a tile to resize.
+              </p>
             </div>
           </>
         )}
