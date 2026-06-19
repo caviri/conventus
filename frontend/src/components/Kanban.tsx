@@ -3,6 +3,7 @@ import * as Y from "yjs";
 import { useStore } from "../store";
 import { api } from "../api";
 import { createCollab } from "../collab";
+import { generateCards, insertCardDrafts } from "../kanbanCards";
 import BoardActions from "./BoardActions";
 import {
   Columns3,
@@ -17,6 +18,7 @@ import {
   Link2,
   Loader2,
   Maximize2,
+  Sparkles,
 } from "lucide-react";
 
 function uid() {
@@ -81,11 +83,19 @@ export default function Kanban({
   const collab = useMemo(() => createCollab(name), [name]);
   const columns = useMemo(() => collab.doc.getArray<Y.Map<any>>("columns"), [collab]);
   const cards = useMemo(() => collab.doc.getArray<Y.Map<any>>("cards"), [collab]);
+  const agent = useStore((s) => s.agent);
   const [, tick] = useState(0);
   const [view, setView] = useState<ViewMode>("board");
   const [peers, setPeers] = useState<{ name: string; color: string }[]>([]);
   const [openCard, setOpenCard] = useState<string | null>(null);
+  const [genOpen, setGenOpen] = useState(false);
   const dragId = useRef<string | null>(null);
+
+  // Generate cards from a prompt and insert them into a chosen column.
+  async function generateCardsInto(prompt: string, colId: string): Promise<number> {
+    const drafts = await generateCards(prompt, members.map((x) => x.name));
+    return insertCardDrafts(collab.doc, columns, cards, drafts, colId || undefined);
+  }
 
   const memberColor = (n?: string) =>
     members.find((m) => m.name === n)?.color || "#64748b";
@@ -201,6 +211,18 @@ export default function Kanban({
             </button>
           ))}
         </div>
+        <button
+          className="btn !py-1.5 text-xs"
+          onClick={() => setGenOpen(true)}
+          disabled={!agent?.enabled}
+          title={
+            agent?.enabled
+              ? "Generate cards from a prompt"
+              : "Enable the Assistant in Settings → Assistant"
+          }
+        >
+          <Sparkles size={14} /> Generate
+        </button>
         <div className="flex -space-x-2">
           {peers.map((p, i) => (
             <span
@@ -459,6 +481,106 @@ export default function Kanban({
           onClose={() => setOpenCard(null)}
         />
       )}
+
+      {genOpen && (
+        <GenerateModal
+          colList={colList}
+          onSubmit={generateCardsInto}
+          onClose={() => setGenOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function GenerateModal({
+  colList,
+  onSubmit,
+  onClose,
+}: {
+  colList: Col[];
+  onSubmit: (prompt: string, colId: string) => Promise<number>;
+  onClose: () => void;
+}) {
+  const [prompt, setPrompt] = useState("");
+  const [colId, setColId] = useState(colList[0]?.id || "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function run() {
+    if (!prompt.trim() || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const n = await onSubmit(prompt.trim(), colId);
+      if (n === 0) setError("No cards were generated — try rephrasing.");
+      else onClose();
+    } catch (e: any) {
+      setError(e.message || "Could not generate cards");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 fade-in"
+      onClick={onClose}
+    >
+      <div
+        className="card w-full max-w-md p-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center gap-2">
+          <Sparkles size={16} className="text-[var(--c-accent)]" />
+          <span className="text-sm font-semibold">Generate cards</span>
+          <button className="btn ml-auto !p-2" onClick={onClose} title="Close">
+            <X size={16} />
+          </button>
+        </div>
+        <textarea
+          autoFocus
+          className="input h-24 resize-y text-sm"
+          placeholder="e.g. 3 onboarding tasks for a new engineer"
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) run();
+          }}
+        />
+        {colList.length > 0 && (
+          <label className="mt-3 block">
+            <span className="mb-1 block text-xs font-medium text-[var(--c-muted)]">
+              Add to list
+            </span>
+            <select
+              className="input"
+              value={colId}
+              onChange={(e) => setColId(e.target.value)}
+            >
+              {colList.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {error && <p className="mt-2 text-sm text-red-300">{error}</p>}
+        <div className="mt-3 flex justify-end gap-2">
+          <button className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            className="btn btn-primary"
+            onClick={run}
+            disabled={busy || !prompt.trim()}
+          >
+            {busy ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
+            Generate
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -533,6 +655,8 @@ function CardModal({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [filling, setFilling] = useState(false);
+  const agent = useStore((s) => s.agent);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -551,6 +675,33 @@ function CardModal({
     }
   }
 
+  // Structured-output enrichment: ask the Assistant to infer card fields from
+  // the card text and apply the validated result (the row-level fill).
+  async function aiFill() {
+    if (filling) return;
+    setFilling(true);
+    try {
+      const res = await api.post<{
+        tags: string;
+        due: string;
+        assignee: string;
+        summary: string;
+      }>("/api/agent/structured", {
+        text: card.text,
+        members: members.map((m) => m.name),
+      });
+      if (res.tags) setField("tags", res.tags);
+      if (res.due) setField("due", res.due);
+      if (res.assignee) setField("assignee", res.assignee);
+      // Only fill text from the summary when the card is otherwise empty.
+      if (res.summary && !card.text.trim()) setField("text", res.summary);
+    } catch (e: any) {
+      alert(e.message || "AI fill failed");
+    } finally {
+      setFilling(false);
+    }
+  }
+
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 fade-in"
@@ -563,7 +714,24 @@ function CardModal({
         <header className="flex items-center gap-2 border-b border-[var(--c-border)] px-4 py-3">
           <Columns3 size={16} className="text-[var(--c-muted)]" />
           <span className="text-sm font-semibold">Card details</span>
-          <button className="btn ml-auto !p-2" onClick={onClose} title="Close (Esc)">
+          <button
+            className="btn ml-auto !py-1.5 text-xs"
+            onClick={aiFill}
+            disabled={filling || !agent?.enabled}
+            title={
+              agent?.enabled
+                ? "Infer tags, due date and assignee from the card text"
+                : "Enable the Assistant in Settings → Assistant"
+            }
+          >
+            {filling ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Sparkles size={14} />
+            )}
+            AI fill
+          </button>
+          <button className="btn !p-2" onClick={onClose} title="Close (Esc)">
             <X size={16} />
           </button>
         </header>

@@ -49,7 +49,14 @@ class CollabHub:
             self.counts[doc] = row["n"] if row else 0
         return self.counts[doc]
 
-    async def _relay(self, doc: str, sender: WebSocket, message: bytes) -> None:
+    async def publish(self, doc: str, update: bytes) -> None:
+        """Relay a server-originated document update (e.g. a REST addition) to
+        everyone currently viewing the board. Persistence is handled by the
+        caller; we just push the frame and let stale counts be recomputed."""
+        self.counts.pop(doc, None)
+        await self._relay(doc, None, bytes([DOC_UPDATE]) + update)
+
+    async def _relay(self, doc: str, sender: WebSocket | None, message: bytes) -> None:
         dead: list[WebSocket] = []
         for sock in list(self.rooms[doc]):
             if sock is sender:

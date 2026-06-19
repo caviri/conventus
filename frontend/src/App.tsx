@@ -142,7 +142,9 @@ export default function App() {
         >
           <Menu size={18} />
         </button>
-        {view.type === "channel" || view.type === "dm" ? (
+        {view.type === "channel" ||
+        view.type === "dm" ||
+        view.type === "conversation" ? (
           <ChatView />
         ) : view.type === "drive" ? (
           <Drive />

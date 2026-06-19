@@ -24,6 +24,10 @@ export default function ChatView() {
   const view = useStore((s) => s.view);
   const channels = useStore((s) => s.channels);
   const dms = useStore((s) => s.dms);
+  const conversations = useStore((s) => s.conversations);
+  const agent = useStore((s) => s.agent);
+  const renameConversation = useStore((s) => s.renameConversation);
+  const deleteConversation = useStore((s) => s.deleteConversation);
   const user = useStore((s) => s.user);
   const messages = useStore((s) => s.messages);
   const typing = useStore((s) => s.typing);
@@ -44,6 +48,16 @@ export default function ChatView() {
   const channel =
     view.type === "channel" ? channels.find((c) => c.id === view.id) : undefined;
   const dm = view.type === "dm" ? dms.find((d) => d.id === view.id) : undefined;
+  const conv =
+    view.type === "conversation"
+      ? conversations.find((c) => c.id === view.id)
+      : undefined;
+
+  async function renameConv() {
+    if (!conv) return;
+    const next = window.prompt("Rename conversation", conv.title)?.trim();
+    if (next && next !== conv.title) await renameConversation(conv.id, next);
+  }
 
   function scrollToBottom() {
     const el = scrollRef.current;
@@ -191,6 +205,25 @@ export default function ChatView() {
               {dm.online ? "online" : "offline"}
             </span>
           </>
+        ) : conv ? (
+          <>
+            <span
+              className="grid h-7 w-7 place-items-center rounded-full text-sm"
+              style={{ background: agent?.color || "#8b5cf6" }}
+            >
+              {agent?.avatar || "✨"}
+            </span>
+            <button
+              onClick={renameConv}
+              title="Rename conversation"
+              className="font-semibold hover:underline"
+            >
+              {conv.title}
+            </button>
+            <span className="text-xs text-[var(--c-muted)]">
+              {agent?.name || "Assistant"}
+            </span>
+          </>
         ) : null}
 
         <div className="ml-auto flex items-center gap-1">
@@ -208,6 +241,17 @@ export default function ChatView() {
               className="grid h-8 w-8 place-items-center rounded-lg text-[var(--c-muted)] hover:bg-[var(--c-elevated)] hover:text-red-300"
               onClick={deleteChannel}
               title="Delete channel"
+            >
+              <Trash2 size={15} />
+            </button>
+          )}
+          {conv && (
+            <button
+              className="grid h-8 w-8 place-items-center rounded-lg text-[var(--c-muted)] hover:bg-[var(--c-elevated)] hover:text-red-300"
+              onClick={() => {
+                if (window.confirm(`Delete “${conv.title}”?`)) deleteConversation(conv.id);
+              }}
+              title="Delete conversation"
             >
               <Trash2 size={15} />
             </button>
@@ -248,6 +292,8 @@ export default function ChatView() {
             subtitle={
               channel
                 ? "No messages yet — plant the first one and watch it grow 🌱"
+                : conv
+                ? "Ask the Assistant anything 🌱"
                 : "Say hello to start the conversation 🌱"
             }
           />

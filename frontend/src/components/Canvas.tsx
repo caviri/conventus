@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../store";
+import { api } from "../api";
 import { createCollab } from "../collab";
 import { caretCoords } from "../caret";
 import { renderContent, splitSegments } from "../format";
 import Markdown from "./Markdown";
 import BoardActions from "./BoardActions";
-import { FileText, Download, FileDown, FileType } from "lucide-react";
+import { FileText, Download, FileDown, FileType, Sparkles, Loader2 } from "lucide-react";
 
 function escapeHtml(s: string): string {
   return s.replace(
@@ -94,6 +95,7 @@ export default function Canvas({
   title: string;
 }) {
   const user = useStore((s) => s.user);
+  const agent = useStore((s) => s.agent);
   const collab = useMemo(() => createCollab(name), [name]);
   const ytext = useMemo(() => collab.doc.getText("content"), [collab]);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -101,7 +103,43 @@ export default function Canvas({
   const [peers, setPeers] = useState<{ name: string; color: string }[]>([]);
   const [cursors, setCursors] = useState<RemoteCursor[]>([]);
   const [dlOpen, setDlOpen] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [, forceTick] = useState(0);
+
+  // Ask the Assistant to continue the document from the caret, inserting its
+  // text into the shared Y.Text so it syncs to everyone like any other edit.
+  async function completeWithAI() {
+    const ta = taRef.current;
+    if (!ta || completing) return;
+    const caret = ta.selectionStart ?? value.length;
+    setCompleting(true);
+    try {
+      const instruction = window.prompt(
+        "How should the Assistant continue? (optional)",
+        ""
+      );
+      if (instruction === null) return; // cancelled
+      const res = await api.post<{ text: string }>("/api/agent/complete", {
+        document: value.slice(0, caret),
+        instruction,
+      });
+      const insert = res.text;
+      if (!insert) return;
+      collab.doc.transact(() => ytext.insert(caret, insert), "local");
+      const next = value.slice(0, caret) + insert + value.slice(caret);
+      setValue(next);
+      requestAnimationFrame(() => {
+        ta.focus();
+        const pos = caret + insert.length;
+        ta.selectionStart = ta.selectionEnd = pos;
+        publishCursor();
+      });
+    } catch (e: any) {
+      alert(e.message || "Could not complete");
+    } finally {
+      setCompleting(false);
+    }
+  }
 
   function downloadMarkdown() {
     setDlOpen(false);
@@ -204,7 +242,25 @@ export default function Canvas({
         <div className="font-semibold">{title}</div>
         <BoardActions id={id} name={title} />
 
-        <div className="relative ml-auto">
+        <button
+          className="btn ml-auto !py-1.5 text-xs"
+          onClick={completeWithAI}
+          disabled={completing || !agent?.enabled}
+          title={
+            agent?.enabled
+              ? "Continue the document with the Assistant"
+              : "Enable the Assistant in Settings → Assistant"
+          }
+        >
+          {completing ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <Sparkles size={14} />
+          )}
+          AI complete
+        </button>
+
+        <div className="relative">
           <button
             className="grid h-7 w-7 place-items-center rounded text-[var(--c-muted)] hover:bg-[var(--c-elevated)] hover:text-[var(--c-text)]"
             onClick={() => setDlOpen((v) => !v)}

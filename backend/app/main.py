@@ -20,10 +20,12 @@ from . import config, db, security
 from .collab import hub as collab_hub
 from .routers import (
     admin,
+    agent,
     auth,
     boards,
     bots,
     channels,
+    conversations,
     dms,
     files,
     folders,
@@ -71,6 +73,7 @@ TAGS_METADATA = [
     {"name": "boards", "description": "Collaborative canvases and whiteboards."},
     {"name": "files", "description": "File uploads and the ephemeral Drive."},
     {"name": "bots", "description": "OpenAI-compatible channel bots (admin)."},
+    {"name": "agent", "description": "The room Assistant: config, private conversations, completion."},
     {"name": "push", "description": "Web Push subscription management."},
     {"name": "admin", "description": "Reserve names, manage members, export/import the room."},
 ]
@@ -103,6 +106,8 @@ app.include_router(boards.router)
 app.include_router(folders.router)
 app.include_router(files.router)
 app.include_router(bots.router)
+app.include_router(agent.router)
+app.include_router(conversations.router)
 app.include_router(admin.router)
 
 

@@ -21,6 +21,7 @@ import {
   FolderPlus,
   ChevronRight,
   ChevronDown,
+  Sparkles,
 } from "lucide-react";
 
 const BOARD_KIND = {
@@ -53,6 +54,9 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
     roomName,
     channels,
     dms,
+    conversations,
+    agent,
+    newConversation,
     members,
     view,
     unread,
@@ -407,6 +411,60 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
             </button>
           );
         })}
+
+        {/* Assistant conversations */}
+        <div className="mb-1 mt-4 flex items-center justify-between px-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-[var(--c-muted)]">
+            Assistant
+          </span>
+          <button
+            className="text-[var(--c-muted)] hover:text-[var(--c-text)]"
+            onClick={async () => {
+              await newConversation();
+              onNavigate();
+            }}
+            title="New conversation"
+          >
+            <Plus size={16} />
+          </button>
+        </div>
+        {conversations.map((c) => {
+          const k = `conversation:${c.id}`;
+          return (
+            <button
+              key={c.id}
+              onClick={() => go({ type: "conversation", id: c.id })}
+              className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition ${
+                active === k
+                  ? "bg-[var(--c-accent-soft)] text-[var(--c-text)]"
+                  : "text-[var(--c-muted)] hover:bg-[var(--c-elevated)]"
+              }`}
+            >
+              <Sparkles
+                size={15}
+                className="shrink-0"
+                style={{ color: agent?.color || "#8b5cf6" }}
+              />
+              <span className="truncate">{c.title}</span>
+              {unread[k] > 0 && active !== k && (
+                <span className="ml-auto rounded-full bg-[var(--c-accent)] px-1.5 text-xs text-white">
+                  {unread[k]}
+                </span>
+              )}
+            </button>
+          );
+        })}
+        {conversations.length === 0 && (
+          <button
+            onClick={async () => {
+              await newConversation();
+              onNavigate();
+            }}
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-[var(--c-muted)] hover:bg-[var(--c-elevated)]"
+          >
+            <Sparkles size={15} /> Ask the Assistant…
+          </button>
+        )}
 
         {/* Members */}
         <div className="mb-1 mt-4 px-2 text-xs font-semibold uppercase tracking-wide text-[var(--c-muted)]">
