@@ -1,18 +1,16 @@
 import { useRef, useState } from "react";
 import { api } from "../api";
 import type { FileItem } from "../types";
-import { Mic, Video, Square, X, Loader2 } from "lucide-react";
+import { Mic, Video, X, Loader2, Send, Circle } from "lucide-react";
 
 // Two composer buttons: record an audio message, or record a low-res, ordered-
-// dithered duotone video. Both upload as a normal attachment (audio/webm →
-// <audio>, video/webm → <video>) so they live in the chat like any message.
+// dithered duotone video. Both upload and POST immediately as a chat message
+// (audio/webm → <audio>, video/webm → <video>) via the onSend callback.
 
 const V_W = 192;
 const V_H = 144;
-// Duotone palette for the dither (dark → light).
 const DARK = [10, 20, 15];
 const LIGHT = [134, 214, 168];
-// 4×4 Bayer matrix (ordered dithering — fast enough per video frame).
 const BAYER = [
   [0, 8, 2, 10],
   [12, 4, 14, 6],
@@ -27,8 +25,8 @@ function ditherDuotone(ctx: CanvasRenderingContext2D, w: number, h: number) {
     for (let x = 0; x < w; x++) {
       const i = (y * w + x) * 4;
       const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-      const threshold = ((BAYER[y & 3][x & 3] + 0.5) / 16) * 255;
-      const c = lum > threshold ? LIGHT : DARK;
+      const t = ((BAYER[y & 3][x & 3] + 0.5) / 16) * 255;
+      const c = lum > t ? LIGHT : DARK;
       d[i] = c[0];
       d[i + 1] = c[1];
       d[i + 2] = c[2];
@@ -45,12 +43,13 @@ function supported(mime: string): boolean {
     return false;
   }
 }
+const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
-function fmt(s: number) {
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-}
-
-export default function MediaCapture({ onAttach }: { onAttach: (f: FileItem) => void }) {
+export default function MediaCapture({
+  onSend,
+}: {
+  onSend: (f: FileItem) => Promise<void>;
+}) {
   const [mode, setMode] = useState<null | "audio" | "video">(null);
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
@@ -73,41 +72,44 @@ export default function MediaCapture({ onAttach }: { onAttach: (f: FileItem) => 
     if (timerRef.current) window.clearInterval(timerRef.current);
     timerRef.current = null;
   }
-
-  function teardown() {
+  function stopMedia() {
     stopTimer();
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     rafRef.current = null;
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setRecording(false);
+  }
+  function close() {
     try {
       if (recRef.current && recRef.current.state !== "inactive") recRef.current.stop();
     } catch {
       /* ignore */
     }
     recRef.current = null;
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    setRecording(false);
-  }
-
-  function close() {
-    teardown();
+    stopMedia();
     setMode(null);
     setSeconds(0);
     setError("");
+    setBusy(false);
   }
 
-  async function upload(blob: Blob, kind: "audio" | "video") {
-    if (!blob.size) return;
+  async function uploadAndSend(blob: Blob, kind: "audio" | "video") {
+    stopMedia();
+    if (!blob.size) {
+      close();
+      return;
+    }
     setBusy(true);
+    setError("");
     try {
-      const ext = "webm";
       const type = kind === "audio" ? "audio/webm" : "video/webm";
-      const file = new File([blob], `${kind}-${Date.now()}.${ext}`, { type });
+      const file = new File([blob], `${kind}-${Date.now()}.webm`, { type });
       const uploaded = await api.upload(file);
-      onAttach(uploaded);
+      await onSend(uploaded);
+      close();
     } catch (e: any) {
-      setError(e?.message || "Upload failed");
-    } finally {
+      setError(e?.message || "Couldn't send — try again.");
       setBusy(false);
     }
   }
@@ -125,7 +127,7 @@ export default function MediaCapture({ onAttach }: { onAttach: (f: FileItem) => 
       const rec = new MediaRecorder(stream, mime ? { mimeType: mime, audioBitsPerSecond: 24000 } : {});
       chunksRef.current = [];
       rec.ondataavailable = (e) => e.data?.size && chunksRef.current.push(e.data);
-      rec.onstop = () => upload(new Blob(chunksRef.current, { type: "audio/webm" }), "audio");
+      rec.onstop = () => uploadAndSend(new Blob(chunksRef.current, { type: "audio/webm" }), "audio");
       recRef.current = rec;
       rec.start();
       setMode("audio");
@@ -133,7 +135,7 @@ export default function MediaCapture({ onAttach }: { onAttach: (f: FileItem) => 
       startTimer();
     } catch (e: any) {
       setError(e?.message || "Couldn't start recording.");
-      teardown();
+      stopMedia();
     }
   }
 
@@ -148,12 +150,12 @@ export default function MediaCapture({ onAttach }: { onAttach: (f: FileItem) => 
       });
       streamRef.current = stream;
       setMode("video");
-      // Wait a tick for the canvas/video elements to mount.
       requestAnimationFrame(() => {
-        const v = videoElRef.current!;
+        const v = videoElRef.current;
+        const cv = canvasRef.current;
+        if (!v || !cv) return;
         v.srcObject = stream;
         v.play().catch(() => {});
-        const cv = canvasRef.current!;
         const ctx = cv.getContext("2d", { willReadFrequently: true })!;
         const loop = () => {
           if (v.readyState >= 2) {
@@ -166,7 +168,8 @@ export default function MediaCapture({ onAttach }: { onAttach: (f: FileItem) => 
       });
     } catch (e: any) {
       setError(e?.message || "Couldn't open the camera.");
-      teardown();
+      stopMedia();
+      setMode(null);
     }
   }
 
@@ -174,9 +177,10 @@ export default function MediaCapture({ onAttach }: { onAttach: (f: FileItem) => 
     const cv = canvasRef.current;
     const stream = streamRef.current;
     if (!cv || !stream) return;
-    const canvasStream = cv.captureStream(12);
-    const tracks = [...canvasStream.getVideoTracks(), ...stream.getAudioTracks()];
-    const combined = new MediaStream(tracks);
+    const combined = new MediaStream([
+      ...cv.captureStream(12).getVideoTracks(),
+      ...stream.getAudioTracks(),
+    ]);
     const mime = supported("video/webm;codecs=vp8,opus")
       ? "video/webm;codecs=vp8,opus"
       : supported("video/webm")
@@ -185,39 +189,33 @@ export default function MediaCapture({ onAttach }: { onAttach: (f: FileItem) => 
     const rec = new MediaRecorder(combined, mime ? { mimeType: mime, videoBitsPerSecond: 300000 } : {});
     chunksRef.current = [];
     rec.ondataavailable = (e) => e.data?.size && chunksRef.current.push(e.data);
-    rec.onstop = () => {
-      upload(new Blob(chunksRef.current, { type: "video/webm" }), "video");
-      close();
-    };
+    rec.onstop = () => uploadAndSend(new Blob(chunksRef.current, { type: "video/webm" }), "video");
     recRef.current = rec;
     rec.start();
     setRecording(true);
     startTimer();
   }
 
-  function stopRec() {
-    stopTimer();
+  // Stop the recorder → its onstop uploads + sends.
+  function finish() {
+    setBusy(true);
     try {
       if (recRef.current && recRef.current.state !== "inactive") recRef.current.stop();
+      else close();
     } catch {
-      /* ignore */
+      close();
     }
-    if (mode === "audio") {
-      setRecording(false);
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-      setMode(null);
-    }
-    // video closes itself in rec.onstop
   }
 
   const overlay = mode && (
-    <div className="card absolute bottom-full left-0 mb-2 w-full max-w-sm p-3 shadow-2xl fade-in">
+    <div className="card absolute bottom-full left-1/2 z-20 mb-2 w-72 max-w-[80vw] -translate-x-1/2 p-3 shadow-2xl fade-in">
       <div className="mb-2 flex items-center gap-2 text-sm">
-        {mode === "audio" ? <Mic size={15} className="text-[var(--c-accent)]" /> : <Video size={15} className="text-[var(--c-accent)]" />}
-        <span className="font-medium">
-          {mode === "audio" ? "Voice message" : "Dithered video"}
-        </span>
+        {mode === "audio" ? (
+          <Mic size={15} className="text-[var(--c-accent)]" />
+        ) : (
+          <Video size={15} className="text-[var(--c-accent)]" />
+        )}
+        <span className="font-medium">{mode === "audio" ? "Voice message" : "Dithered video"}</span>
         {recording && (
           <span className="flex items-center gap-1.5 text-xs text-red-300">
             <span className="h-2 w-2 animate-pulse rounded-full bg-red-400" /> {fmt(seconds)}
@@ -235,26 +233,24 @@ export default function MediaCapture({ onAttach }: { onAttach: (f: FileItem) => 
             ref={canvasRef}
             width={V_W}
             height={V_H}
-            className="mx-auto block w-full max-w-[16rem] rounded-lg border border-[var(--c-border)]"
+            className="mx-auto mb-2 block w-full rounded-lg border border-[var(--c-border)]"
             style={{ imageRendering: "pixelated", aspectRatio: `${V_W}/${V_H}` }}
           />
         </>
       )}
 
-      <div className="mt-2 flex items-center justify-center gap-2">
-        {mode === "audio" && recording && (
-          <button className="btn btn-primary" onClick={stopRec} disabled={busy}>
-            {busy ? <Loader2 size={15} className="animate-spin" /> : <Square size={15} />} Stop & send
+      <div className="flex items-center justify-end gap-2">
+        <button className="btn !py-1.5 text-xs" onClick={close} disabled={busy}>
+          Cancel
+        </button>
+        {mode === "video" && !recording ? (
+          <button className="btn btn-primary !py-1.5 text-xs" onClick={startVideoRec}>
+            <Circle size={13} className="fill-current" /> Record
           </button>
-        )}
-        {mode === "video" && !recording && (
-          <button className="btn btn-primary" onClick={startVideoRec}>
-            <Video size={15} /> Record
-          </button>
-        )}
-        {mode === "video" && recording && (
-          <button className="btn btn-primary" onClick={stopRec} disabled={busy}>
-            {busy ? <Loader2 size={15} className="animate-spin" /> : <Square size={15} />} Stop & send
+        ) : (
+          <button className="btn btn-primary !py-1.5 text-xs" onClick={finish} disabled={busy}>
+            {busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+            {busy ? "Sending…" : "Send"}
           </button>
         )}
       </div>
@@ -267,7 +263,7 @@ export default function MediaCapture({ onAttach }: { onAttach: (f: FileItem) => 
       {overlay}
       <button
         className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[var(--c-muted)] transition hover:bg-[var(--c-elevated)] hover:text-[var(--c-text)] disabled:opacity-40"
-        onClick={() => (mode === "audio" ? close() : startAudio())}
+        onClick={() => (mode ? close() : startAudio())}
         disabled={mode === "video"}
         title="Record a voice message"
       >
@@ -275,7 +271,7 @@ export default function MediaCapture({ onAttach }: { onAttach: (f: FileItem) => 
       </button>
       <button
         className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[var(--c-muted)] transition hover:bg-[var(--c-elevated)] hover:text-[var(--c-text)] disabled:opacity-40"
-        onClick={() => (mode === "video" ? close() : openVideo())}
+        onClick={() => (mode ? close() : openVideo())}
         disabled={mode === "audio"}
         title="Record a dithered video"
       >

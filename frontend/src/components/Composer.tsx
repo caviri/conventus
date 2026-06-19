@@ -184,6 +184,16 @@ export default function Composer({
     }
   }
 
+  // Post a recorded audio/video clip as its own message right away.
+  async function sendMedia(f: FileItem) {
+    await api.post(endpoint, {
+      content: "",
+      attachments: [f.id],
+      reply_to: replyTarget?.id ?? null,
+    });
+    setReplyTarget(null);
+  }
+
   function onKeyDown(e: React.KeyboardEvent) {
     if (showMentions) {
       if (e.key === "ArrowDown") {
@@ -398,7 +408,7 @@ export default function Composer({
           >
             <Code2 size={18} />
           </button>
-          <MediaCapture onAttach={(f) => setAttachments((a) => [...a, f])} />
+          <MediaCapture onSend={sendMedia} />
           <textarea
             ref={taRef}
             rows={1}
