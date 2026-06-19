@@ -21,11 +21,14 @@ export default function Composer({
   const [widgetMode, setWidgetMode] = useState(false);
   const [paletteIndex, setPaletteIndex] = useState(0);
   const [paletteClosed, setPaletteClosed] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const lastTyping = useRef(0);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   const user = useStore((s) => s.user);
+  const members = useStore((s) => s.members);
   const openDm = useStore((s) => s.openDm);
   const refreshChannels = useStore((s) => s.refreshChannels);
   const addLocalMessage = useStore((s) => s.addLocalMessage);
@@ -46,6 +49,22 @@ export default function Composer({
   );
   const showPalette = !widgetMode && !paletteClosed && matches.length > 0;
 
+  // @-mention autocomplete: people (and the Assistant) matching the @token at
+  // the caret. The Assistant is part of the member roster, so it's included.
+  const mentionMatches = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    return members
+      .filter((m) => m.name.toLowerCase().includes(q))
+      .sort((a, b) => {
+        const aStart = a.name.toLowerCase().startsWith(q) ? 0 : 1;
+        const bStart = b.name.toLowerCase().startsWith(q) ? 0 : 1;
+        return aStart - bStart || a.name.localeCompare(b.name);
+      })
+      .slice(0, 6);
+  }, [mentionQuery, members]);
+  const showMentions = !widgetMode && mentionMatches.length > 0;
+
   function makeCtx(): CommandContext {
     return {
       view,
@@ -64,6 +83,24 @@ export default function Composer({
     setText(`/${name} `);
     setPaletteClosed(true);
     taRef.current?.focus();
+  }
+
+  // Replace the half-typed "@query" before the caret with "@name ".
+  function completeMention(name: string) {
+    const ta = taRef.current;
+    if (!ta) return;
+    const pos = ta.selectionStart ?? text.length;
+    const before = text.slice(0, pos).replace(/@([^\s@]*)$/, `@${name} `);
+    const after = text.slice(pos);
+    const next = before + after;
+    setText(next);
+    setMentionQuery(null);
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.selectionStart = ta.selectionEnd = before.length;
+      ta.style.height = "auto";
+      ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+    });
   }
 
   async function handleFiles(files: FileList | null) {
@@ -147,6 +184,28 @@ export default function Composer({
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
+    if (showMentions) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionIndex((i) => (i + 1) % mentionMatches.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionIndex((i) => (i - 1 + mentionMatches.length) % mentionMatches.length);
+        return;
+      }
+      if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
+        e.preventDefault();
+        completeMention(mentionMatches[Math.min(mentionIndex, mentionMatches.length - 1)].name);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMentionQuery(null);
+        return;
+      }
+    }
     if (showPalette) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
@@ -180,6 +239,11 @@ export default function Composer({
     setPaletteIndex(0);
     setPaletteClosed(false);
     const ta = e.target;
+    // Detect an @mention being typed at the caret (start or after whitespace).
+    const pos = ta.selectionStart ?? ta.value.length;
+    const m = ta.value.slice(0, pos).match(/(?:^|\s)@([^\s@]*)$/);
+    setMentionQuery(m ? m[1] : null);
+    setMentionIndex(0);
     ta.style.height = "auto";
     ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
     const now = Date.now();
@@ -229,6 +293,37 @@ export default function Composer({
               <span className="ml-auto truncate pl-3 text-xs text-[var(--c-muted)]">
                 {c.description}
               </span>
+            </button>
+          ))}
+        </div>
+      )}
+      {showMentions && (
+        <div className="card mb-2 overflow-hidden p-1 fade-in">
+          <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--c-muted)]">
+            Mention — ↑/↓ to navigate, Tab to insert
+          </div>
+          {mentionMatches.map((m, i) => (
+            <button
+              key={m.name}
+              onMouseEnter={() => setMentionIndex(i)}
+              onClick={() => completeMention(m.name)}
+              className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm ${
+                i === mentionIndex ? "bg-[var(--c-accent-soft)]" : "hover:bg-[var(--c-elevated)]"
+              }`}
+            >
+              <span
+                className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ background: m.color }}
+              />
+              <span className="font-medium">@{m.name}</span>
+              {m.is_agent && (
+                <span className="text-xs text-[var(--c-accent)]">assistant</span>
+              )}
+              {m.status && (
+                <span className="ml-auto truncate pl-3 text-xs text-[var(--c-muted)]">
+                  {m.status}
+                </span>
+              )}
             </button>
           ))}
         </div>

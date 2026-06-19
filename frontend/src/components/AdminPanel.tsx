@@ -15,18 +15,21 @@ import {
   Pencil,
   Check,
   X,
+  Sparkles,
+  Save,
 } from "lucide-react";
 
-type Tab = "bots" | "members" | "room";
+type Tab = "assistant" | "bots" | "members" | "room";
 
 export default function AdminPanel() {
-  const [tab, setTab] = useState<Tab>("bots");
+  const [tab, setTab] = useState<Tab>("assistant");
   return (
     <div className="flex h-full flex-col">
       <header className="surface flex items-center gap-3 border-b border-[var(--c-border)] px-4 py-3 pl-14 md:pl-4">
         <Shield size={18} className="text-amber-400" />
         <div className="font-semibold">Admin</div>
         <div className="ml-auto flex gap-1 overflow-x-auto md:ml-4">
+          <Tabish icon={<Sparkles size={15} />} label="Assistant" active={tab === "assistant"} onClick={() => setTab("assistant")} />
           <Tabish icon={<BotIcon size={15} />} label="Bots" active={tab === "bots"} onClick={() => setTab("bots")} />
           <Tabish icon={<Users size={15} />} label="Members" active={tab === "members"} onClick={() => setTab("members")} />
           <Tabish icon={<Database size={15} />} label="Room" active={tab === "room"} onClick={() => setTab("room")} />
@@ -34,9 +37,119 @@ export default function AdminPanel() {
       </header>
       <div className="flex-1 overflow-y-auto p-4">
         <div className="mx-auto max-w-3xl">
+          {tab === "assistant" && <AssistantTab />}
           {tab === "bots" && <BotsTab />}
           {tab === "members" && <MembersTab />}
           {tab === "room" && <RoomTab />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AssistantTab() {
+  const agent = useStore((s) => s.agent);
+  const refreshAgent = useStore((s) => s.refreshAgent);
+  const [form, setForm] = useState({
+    name: "Assistant",
+    base_url: "https://api.openai.com/v1",
+    model: "gpt-4o-mini",
+    model_type: "standard" as "standard" | "reasoning",
+    system_prompt: "",
+    color: "#8b5cf6",
+    avatar: "✨",
+    enabled: false,
+  });
+  const [apiKey, setApiKey] = useState(""); // blank = keep existing
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    refreshAgent();
+  }, [refreshAgent]);
+  useEffect(() => {
+    if (!agent) return;
+    setForm({
+      name: agent.name,
+      base_url: agent.base_url,
+      model: agent.model,
+      model_type: agent.model_type,
+      system_prompt: agent.system_prompt,
+      color: agent.color,
+      avatar: agent.avatar,
+      enabled: agent.enabled,
+    });
+  }, [agent]);
+
+  const keySet = agent?.api_key === "•••";
+
+  async function save() {
+    const payload: Record<string, unknown> = { ...form };
+    if (apiKey) payload.api_key = apiKey;
+    await api.patch("/api/agent", payload);
+    setApiKey("");
+    await refreshAgent();
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1500);
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--c-muted)]">
+        The room Assistant — one OpenAI-compatible endpoint that powers private
+        conversations, inline channel replies (@mention), live-document completion
+        and kanban fill. It appears in the member list when enabled.
+      </p>
+      <div className="card space-y-3 p-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Name (used for @mentions)">
+            <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </Field>
+          <Field label="Model">
+            <input className="input" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
+          </Field>
+          <Field label="Model type">
+            <select
+              className="input"
+              value={form.model_type}
+              onChange={(e) => setForm({ ...form, model_type: e.target.value as "standard" | "reasoning" })}
+            >
+              <option value="standard">Standard</option>
+              <option value="reasoning">Reasoning (e.g. gpt-oss, o-series)</option>
+            </select>
+          </Field>
+          <Field label="Avatar (emoji or image URL)">
+            <input className="input" value={form.avatar} onChange={(e) => setForm({ ...form, avatar: e.target.value })} />
+          </Field>
+          <Field label="Base URL (OpenAI-compatible)">
+            <input className="input" value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })} />
+          </Field>
+          <Field label={`API key${keySet ? " (leave blank to keep)" : ""}`}>
+            <input
+              className="input"
+              type="password"
+              value={apiKey}
+              placeholder={keySet ? "••••••" : "sk-…"}
+              onChange={(e) => setApiKey(e.target.value)}
+            />
+          </Field>
+        </div>
+        <Field label="Base system prompt / context">
+          <textarea
+            className="input h-24 resize-y"
+            value={form.system_prompt}
+            placeholder="You are a helpful assistant for this room…"
+            onChange={(e) => setForm({ ...form, system_prompt: e.target.value })}
+          />
+        </Field>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} />
+          Enabled
+        </label>
+        <div className="flex items-center gap-2">
+          <button className="btn btn-primary" onClick={save}>
+            <Save size={16} /> Save
+          </button>
+          {saved && <span className="text-sm text-emerald-400 fade-in">Saved ✓</span>}
         </div>
       </div>
     </div>

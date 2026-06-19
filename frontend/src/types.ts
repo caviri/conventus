@@ -10,6 +10,7 @@ export interface Member extends User {
   status: string;
   avatar: string;
   last_seen: number;
+  is_agent?: boolean;
 }
 
 export interface Channel {

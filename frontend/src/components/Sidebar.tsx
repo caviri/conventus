@@ -470,16 +470,38 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
         <div className="mb-1 mt-4 px-2 text-xs font-semibold uppercase tracking-wide text-[var(--c-muted)]">
           Members — {members.filter((m) => m.online).length} online
         </div>
+        {user && (
+          <button
+            onClick={() => {
+              openDm(user.name); // a DM with yourself = private notes
+              onNavigate();
+            }}
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-[var(--c-muted)] transition hover:bg-[var(--c-elevated)]"
+            title="Your private notes (a conversation only you can see)"
+          >
+            <Dot color="#34d399" />
+            <span className="max-w-[7rem] shrink-0 truncate text-[var(--c-text)]">
+              {user.name}
+            </span>
+            <span className="text-xs opacity-60">(you)</span>
+          </button>
+        )}
         {others.map((m) => (
           <button
             key={m.name}
             onClick={() => {
-              openDm(m.name);
+              // The Assistant isn't a real user — start a conversation instead of a DM.
+              if (m.is_agent) newConversation();
+              else openDm(m.name);
               onNavigate();
             }}
             className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-[var(--c-muted)] transition hover:bg-[var(--c-elevated)]"
           >
-            <Dot color={m.online ? "#34d399" : "#475569"} />
+            {m.is_agent ? (
+              <Sparkles size={13} className="shrink-0" style={{ color: m.color }} />
+            ) : (
+              <Dot color={m.online ? "#34d399" : "#475569"} />
+            )}
             <span
               className="max-w-[7rem] shrink-0 truncate"
               style={{ color: m.online ? "var(--c-text)" : undefined }}
