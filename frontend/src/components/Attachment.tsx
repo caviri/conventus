@@ -1,6 +1,8 @@
 import type { Attachment as AttachmentType } from "../types";
 import { formatBytes } from "../format";
 import { useStore } from "../store";
+import AudioMessage from "./AudioMessage";
+import VideoMessage from "./VideoMessage";
 import { FileText, Download } from "lucide-react";
 
 export default function Attachment({ a }: { a: AttachmentType }) {
@@ -19,24 +21,11 @@ export default function Attachment({ a }: { a: AttachmentType }) {
   }
 
   if (a.mime.startsWith("video/")) {
-    return (
-      <video
-        src={a.url}
-        controls
-        playsInline
-        preload="metadata"
-        className="max-h-80 max-w-full rounded-xl border border-[var(--c-border)]"
-      />
-    );
+    return <VideoMessage a={a} />;
   }
 
   if (a.mime.startsWith("audio/")) {
-    return (
-      <div className="card max-w-md p-3">
-        <div className="mb-2 truncate text-sm">{a.name}</div>
-        <audio src={a.url} controls className="w-full" />
-      </div>
-    );
+    return <AudioMessage a={a} />;
   }
 
   return (
