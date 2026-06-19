@@ -198,11 +198,12 @@ export default function Whiteboard({
     const v = view.current;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    // Subtle board bounds so users can see the extent of the W×H world.
-    ctx.setTransform(dpr * v.scale, 0, 0, dpr * v.scale, dpr * v.x, dpr * v.y);
+    // Full-bleed white: the whole panel is the drawing surface (no dark margins).
     ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, W, H);
-    ctx.strokeStyle = "rgba(100,116,139,0.35)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(dpr * v.scale, 0, 0, dpr * v.scale, dpr * v.x, dpr * v.y);
+    // A faint outline of the "page" bounds for orientation (matches the minimap).
+    ctx.strokeStyle = "rgba(100,116,139,0.25)";
     ctx.lineWidth = 1 / v.scale;
     ctx.strokeRect(0, 0, W, H);
     images.forEach((im) => drawImage(im, ctx));
