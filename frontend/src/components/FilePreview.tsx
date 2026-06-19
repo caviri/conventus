@@ -104,7 +104,13 @@ export default function FilePreview({
               className="mx-auto max-h-[75vh] rounded-lg object-contain"
             />
           ) : kind === "video" ? (
-            <video src={file.url} controls className="mx-auto max-h-[75vh] w-full rounded-lg" />
+            <video
+              src={file.url}
+              controls
+              playsInline
+              preload="metadata"
+              className="mx-auto max-h-[75vh] w-full rounded-lg"
+            />
           ) : kind === "audio" ? (
             <audio src={file.url} controls className="w-full" />
           ) : kind === "pdf" ? (

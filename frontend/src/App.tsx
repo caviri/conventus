@@ -100,6 +100,37 @@ export default function App() {
     return () => document.removeEventListener("click", onClick);
   }, [user, setLightbox]);
 
+  // Touch gestures (phones): edge-swipe right to open the sidebar, swipe left to
+  // close it. The open gesture must start near the left edge so it doesn't fight
+  // with horizontal scrolls/canvas panning in the content.
+  useEffect(() => {
+    if (!user) return;
+    let startX = 0;
+    let startY = 0;
+    let tracking = false;
+    const onStart = (e: TouchEvent) => {
+      if (window.innerWidth >= 768 || e.touches.length !== 1) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      tracking = sidebarOpen || startX < 28; // edge-swipe to open, anywhere to close
+    };
+    const onEnd = (e: TouchEvent) => {
+      if (!tracking) return;
+      tracking = false;
+      const dx = e.changedTouches[0].clientX - startX;
+      const dy = e.changedTouches[0].clientY - startY;
+      if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.4) return; // not horizontal
+      if (dx > 0 && !sidebarOpen) setSidebarOpen(true);
+      else if (dx < 0 && sidebarOpen) setSidebarOpen(false);
+    };
+    window.addEventListener("touchstart", onStart, { passive: true });
+    window.addEventListener("touchend", onEnd, { passive: true });
+    return () => {
+      window.removeEventListener("touchstart", onStart);
+      window.removeEventListener("touchend", onEnd);
+    };
+  }, [user, sidebarOpen]);
+
   if (!ready) {
     return (
       <div className="flex h-full items-center justify-center text-[var(--c-muted)]">

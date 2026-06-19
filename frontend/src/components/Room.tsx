@@ -160,7 +160,9 @@ export default function Room({
   }
 
   function playClip(sender: string, audio: ArrayBuffer) {
-    const blob = new Blob([audio], { type: mimeRef.current || "audio/webm" });
+    // Let the browser sniff the container — the sender's codec may differ from
+    // ours (e.g. a Safari peer records mp4/AAC while we record webm/opus).
+    const blob = new Blob([audio]);
     const url = URL.createObjectURL(blob);
     const a = new Audio(url);
     markTalking(sender, true);

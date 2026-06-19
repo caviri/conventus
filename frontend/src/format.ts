@@ -153,7 +153,7 @@ export function renderContent(text: string): string {
     (_m, alt, url) => {
       const u = escapeAttr(url);
       if (/\.(mp4|webm|ogv)(\?|$)/i.test(url))
-        return hold(`<video src="${u}" controls class="md-media"></video>`);
+        return hold(`<video src="${u}" controls playsinline preload="metadata" class="md-media"></video>`);
       if (/\.(mp3|wav|m4a|oga|ogg|opus)(\?|$)/i.test(url))
         return hold(`<audio src="${u}" controls class="md-media"></audio>`);
       return hold(
