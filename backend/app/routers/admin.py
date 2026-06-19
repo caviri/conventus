@@ -106,3 +106,30 @@ async def import_room(file: UploadFile = File(...), user=Depends(require_admin))
 
     await hub.broadcast("room.reload", {})
     return {"ok": True}
+
+
+# Everything wiped by a factory reset — the room tables plus private threads,
+# the Assistant/agent config, board CRDT contents and push subscriptions.
+RESET_TABLES = TABLES + ["conversations", "agent", "collab_updates", "push_subscriptions"]
+
+
+@router.post("/reset")
+async def factory_reset(user=Depends(require_admin)):
+    """Erase the entire room and re-seed a fresh install: deletes all messages,
+    channels, boards (and their contents), members, bots, files and the Assistant
+    config, then recreates the defaults (general channel, the three boards, a
+    disabled Gardener). Destructive and irreversible."""
+    for table in RESET_TABLES:
+        db.execute(f"DELETE FROM {table}")
+    # Drop uploaded files from disk.
+    config.ensure_dirs()
+    for f in config.FILES_DIR.glob("*"):
+        try:
+            if f.is_file():
+                f.unlink()
+        except OSError:
+            pass
+    # Re-seed defaults (default channel, the three boards incl. kanban, Gardener).
+    db.init()
+    await hub.broadcast("room.reload", {})
+    return {"ok": True}

@@ -425,6 +425,21 @@ function MembersTab() {
 function RoomTab() {
   const [importing, setImporting] = useState(false);
   const [msg, setMsg] = useState("");
+  const [resetConfirm, setResetConfirm] = useState("");
+  const [resetting, setResetting] = useState(false);
+
+  async function doReset() {
+    if (resetConfirm !== "RESET") return;
+    setResetting(true);
+    try {
+      await api.post("/api/admin/reset", {});
+      // The room is now fresh — reload to re-bootstrap from a clean state.
+      location.reload();
+    } catch (e: any) {
+      setMsg(e.message);
+      setResetting(false);
+    }
+  }
 
   async function doExport() {
     const blob = await api.exportRoom();
@@ -485,6 +500,32 @@ curl $URL/api/channels/1/messages -X POST \\
   -H 'content-type: application/json' \\
   -d '{"content":"Hello from the API 🚀"}'`}
         </pre>
+      </div>
+
+      <div className="card space-y-3 border border-red-500/40 p-4">
+        <h3 className="font-semibold text-red-300">Danger zone</h3>
+        <p className="text-sm text-[var(--c-muted)]">
+          <b>Factory reset</b> erases the entire room — every message, channel,
+          board and its contents, member, bot, uploaded file and the Assistant
+          config — then recreates the defaults (the <code>general</code> channel,
+          the three boards, and a disabled Gardener). This cannot be undone;
+          export first if you want a backup.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            className="input !w-auto"
+            placeholder="Type RESET to confirm"
+            value={resetConfirm}
+            onChange={(e) => setResetConfirm(e.target.value)}
+          />
+          <button
+            className="btn !bg-red-500/15 !text-red-300 hover:!bg-red-500/25 disabled:opacity-40"
+            onClick={doReset}
+            disabled={resetConfirm !== "RESET" || resetting}
+          >
+            <Trash2 size={16} /> {resetting ? "Resetting…" : "Factory reset"}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -95,3 +95,18 @@ Dockerfile, docker-compose.yml, DEPLOY.md, DESIGN.md
 `.claude/skills/` has task-specific helpers: `conventus-dev` (build/run/test),
 `conventus-admin` (admin actions via the API), `conventus-docs` (write/regenerate
 docs), and `conventus-design` (restyle / new themes).
+
+## Known limitations / TODO
+
+Call rooms (`backend/app/voice.py`, `frontend/src/components/Room.tsx`):
+
+- **Audio codec interop.** Clips are whatever each browser's `MediaRecorder`
+  produces — Chrome/Firefox emit `webm/opus`, Safari emits `mp4/AAC`. There is no
+  single format every browser both records *and* decodes, so **Chrome → iOS
+  Safari audio won't play** (iOS can't decode Opus/webm). Fixing it needs either
+  server-side transcoding or a Web-Audio PCM path (capture raw PCM, send that,
+  play via an `AudioContext`) — a meaningful chunk of work, not yet done.
+- **iOS autoplay of incoming clips.** Received clips play via `new Audio().play()`
+  outside a user gesture. iOS usually allows it once you've joined (the join tap
+  unlocks audio) but Safari can be strict. More reliable would be to resume a
+  single `AudioContext` on the join tap and route all playback through it.
