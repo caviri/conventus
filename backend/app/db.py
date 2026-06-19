@@ -220,6 +220,24 @@ def init() -> None:
             )
         # The single Assistant row (disabled until an admin configures it).
         conn.execute("INSERT OR IGNORE INTO agent(id) VALUES (1)")
+        # Optionally point the Assistant at an endpoint from the environment so a
+        # fresh deploy ships with it ready. Env manages only the endpoint + token
+        # (+ enabled); model/type/name stay admin-controlled in Settings and are
+        # only touched here when their env vars are explicitly provided — so an
+        # admin's Settings choices are never clobbered on restart.
+        if config.AGENT_ENDPOINT and config.AGENT_TOKEN:
+            conn.execute(
+                "UPDATE agent SET base_url = ?, api_key = ?, enabled = 1 WHERE id = 1",
+                (config.AGENT_ENDPOINT, config.AGENT_TOKEN),
+            )
+            if config.AGENT_NAME:
+                conn.execute("UPDATE agent SET name = ? WHERE id = 1", (config.AGENT_NAME,))
+            if config.AGENT_MODEL:
+                conn.execute("UPDATE agent SET model = ? WHERE id = 1", (config.AGENT_MODEL,))
+            if config.AGENT_MODEL_TYPE in ("standard", "reasoning"):
+                conn.execute(
+                    "UPDATE agent SET model_type = ? WHERE id = 1", (config.AGENT_MODEL_TYPE,)
+                )
 
 
 def _exec(query: str, params: Iterable[Any] = ()) -> sqlite3.Cursor:
