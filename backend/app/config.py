@@ -54,6 +54,18 @@ PORT: int = _env_int("PORT", 7860)
 # A friendly, public name shown in the UI header.
 ROOM_NAME: str = _env("ROOM_NAME", "Conventus")
 
+# Optional: point the room Assistant at an endpoint from the environment. When
+# both AGENT_ENDPOINT and AGENT_TOKEN are set, the Assistant is enabled on startup
+# with that endpoint + token (handy for reproducible deploys). The model, type and
+# name are normally set by an admin in Settings → Assistant; the AGENT_MODEL /
+# AGENT_MODEL_TYPE / AGENT_NAME vars are optional overrides that only apply when
+# explicitly set and never overwrite an admin's Settings choices on restart.
+AGENT_ENDPOINT: str = _env("AGENT_ENDPOINT", "")
+AGENT_TOKEN: str = _env("AGENT_TOKEN", "")
+AGENT_MODEL: str = _env("AGENT_MODEL", "")
+AGENT_MODEL_TYPE: str = _env("AGENT_MODEL_TYPE", "")  # standard | reasoning
+AGENT_NAME: str = _env("AGENT_NAME", "")
+
 
 def ensure_dirs() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
