@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import { api } from "../api";
+import AssistantSettings from "./AssistantSettings";
 import { applyCustomCss, getCustomCss, saveCustomCss } from "../customcss";
 import { notificationsEnabled, requestNotifications } from "../notifications";
 import { subscribeToPush } from "../push";
@@ -179,6 +180,8 @@ export default function Settings() {
 
       <div className="flex-1 overflow-y-auto p-4">
         <div className="mx-auto max-w-3xl space-y-6">
+          <AssistantSettings />
+
           <section className="card p-4">
             <div className="mb-2 flex items-center gap-2">
               <Smartphone size={16} className="text-[var(--c-accent)]" />

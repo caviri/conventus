@@ -62,6 +62,7 @@ export interface Message {
   id: number;
   channel_id: number | null;
   dm_id: number | null;
+  conversation_id: number | null;
   author: string;
   kind: "text" | "system" | "bot";
   content: string;
@@ -108,6 +109,28 @@ export interface Bot {
   enabled: boolean;
 }
 
+// The room's single configurable Assistant (api_key is masked when read).
+export interface AgentConfig {
+  name: string;
+  base_url: string;
+  api_key: string;
+  model: string;
+  model_type: "standard" | "reasoning";
+  system_prompt: string;
+  color: string;
+  avatar: string;
+  enabled: boolean;
+}
+
+// A private 1:1 thread with the Assistant.
+export interface Conversation {
+  id: number;
+  title: string;
+  system_prompt: string;
+  updated_at: number;
+  last?: Message | null;
+}
+
 export type SearchLocation =
   | { type: "channel"; id: number; name: string }
   | { type: "dm"; id: number; with: string };
@@ -129,6 +152,7 @@ export interface Board {
 export type View =
   | { type: "channel"; id: number }
   | { type: "dm"; id: number }
+  | { type: "conversation"; id: number }
   | { type: "drive" }
   | { type: "canvas"; id: number }
   | { type: "whiteboard"; id: number }

@@ -2,9 +2,11 @@ import { create } from "zustand";
 import { api, getToken, setToken } from "./api";
 import { notifyMention } from "./notifications";
 import type {
+  AgentConfig,
   Board,
   Bot,
   Channel,
+  Conversation,
   DM,
   FileItem,
   Folder,
@@ -17,6 +19,7 @@ import type {
 export function viewKey(view: View): string {
   if (view.type === "channel") return `channel:${view.id}`;
   if (view.type === "dm") return `dm:${view.id}`;
+  if (view.type === "conversation") return `conversation:${view.id}`;
   if (view.type === "canvas") return `canvas:${view.id}`;
   if (view.type === "whiteboard") return `whiteboard:${view.id}`;
   if (view.type === "kanban") return `kanban:${view.id}`;
@@ -34,6 +37,8 @@ interface State {
   roomName: string;
   channels: Channel[];
   dms: DM[];
+  conversations: Conversation[];
+  agent: AgentConfig | null;
   members: Member[];
   online: string[];
   bots: Bot[];
@@ -56,6 +61,13 @@ interface State {
   loadMessages: (view: View) => Promise<void>;
   refreshChannels: () => Promise<void>;
   refreshDms: () => Promise<void>;
+  refreshAgent: () => Promise<void>;
+  refreshConversations: () => Promise<void>;
+  newConversation: (title?: string) => Promise<void>;
+  openConversation: (id: number) => Promise<void>;
+  renameConversation: (id: number, title: string) => Promise<void>;
+  setConversationPrompt: (id: number, systemPrompt: string) => Promise<void>;
+  deleteConversation: (id: number) => Promise<void>;
   refreshMembers: () => Promise<void>;
   refreshBots: () => Promise<void>;
   refreshBoards: () => Promise<void>;
@@ -81,6 +93,8 @@ export const useStore = create<State>((set, get) => ({
   roomName: "Conventus",
   channels: [],
   dms: [],
+  conversations: [],
+  agent: null,
   members: [],
   online: [],
   bots: [],
@@ -109,6 +123,8 @@ export const useStore = create<State>((set, get) => ({
       await Promise.all([
         get().refreshChannels(),
         get().refreshDms(),
+        get().refreshConversations(),
+        get().refreshAgent(),
         get().refreshMembers(),
         get().refreshBoards(),
         get().refreshFolders(),
@@ -128,6 +144,8 @@ export const useStore = create<State>((set, get) => ({
     await Promise.all([
       get().refreshChannels(),
       get().refreshDms(),
+      get().refreshConversations(),
+      get().refreshAgent(),
       get().refreshMembers(),
       get().refreshBoards(),
       get().refreshFolders(),
@@ -143,6 +161,7 @@ export const useStore = create<State>((set, get) => ({
       messages: {},
       unread: {},
       dms: [],
+      conversations: [],
       view: { type: "channel", id: 0 },
     });
   },
@@ -153,7 +172,7 @@ export const useStore = create<State>((set, get) => ({
       unread: { ...s.unread, [viewKey(view)]: 0 },
       replyTarget: null,
     }));
-    if (view.type === "channel" || view.type === "dm") {
+    if (view.type === "channel" || view.type === "dm" || view.type === "conversation") {
       await get().loadMessages(view);
     }
     if (view.type === "drive") await get().refreshFiles();
@@ -162,10 +181,13 @@ export const useStore = create<State>((set, get) => ({
 
   async loadMessages(view) {
     const key = viewKey(view);
+    const id = (view as any).id;
     const base =
       view.type === "channel"
-        ? `/api/channels/${(view as any).id}/messages`
-        : `/api/dms/${(view as any).id}/messages`;
+        ? `/api/channels/${id}/messages`
+        : view.type === "conversation"
+        ? `/api/conversations/${id}/messages`
+        : `/api/dms/${id}/messages`;
     const msgs = await api.get<Message[]>(base);
     set((s) => ({ messages: { ...s.messages, [key]: msgs } }));
   },
@@ -175,6 +197,41 @@ export const useStore = create<State>((set, get) => ({
   },
   async refreshDms() {
     set({ dms: await api.get<DM[]>("/api/dms") });
+  },
+  async refreshAgent() {
+    try {
+      set({ agent: await api.get<AgentConfig>("/api/agent") });
+    } catch {
+      set({ agent: null });
+    }
+  },
+  async refreshConversations() {
+    set({ conversations: await api.get<Conversation[]>("/api/conversations") });
+  },
+  async newConversation(title) {
+    const c = await api.post<Conversation>("/api/conversations", title ? { title } : {});
+    await get().refreshConversations();
+    await get().setView({ type: "conversation", id: c.id });
+  },
+  async openConversation(id) {
+    await get().setView({ type: "conversation", id });
+  },
+  async renameConversation(id, title) {
+    await api.patch(`/api/conversations/${id}`, { title });
+    await get().refreshConversations();
+  },
+  async setConversationPrompt(id, systemPrompt) {
+    await api.patch(`/api/conversations/${id}`, { system_prompt: systemPrompt });
+    await get().refreshConversations();
+  },
+  async deleteConversation(id) {
+    await api.del(`/api/conversations/${id}`);
+    const wasViewing = get().view.type === "conversation" && (get().view as any).id === id;
+    await get().refreshConversations();
+    if (wasViewing) {
+      const first = get().channels[0];
+      if (first) await get().setView({ type: "channel", id: first.id });
+    }
   },
   async refreshMembers() {
     set({ members: await api.get<Member[]>("/api/members") });
@@ -212,6 +269,8 @@ export const useStore = create<State>((set, get) => ({
         id: _localSeq--,
         channel_id: s.view.type === "channel" ? s.view.id : null,
         dm_id: s.view.type === "dm" ? s.view.id : null,
+        conversation_id:
+          s.view.type === "conversation" ? s.view.id : null,
         author: kind === "bot" ? "Conventus" : "system",
         kind,
         content,
@@ -258,6 +317,8 @@ export const useStore = create<State>((set, get) => ({
             ...m,
             online: online.includes(m.name),
           })),
+          // Keep the presence dot beside each DM live, not just on new messages.
+          dms: s.dms.map((d) => ({ ...d, online: online.includes(d.with) })),
         }));
         // Only hit the network if someone we don't know yet came online.
         if (online.some((n) => !known.has(n))) get().refreshMembers();
@@ -268,6 +329,8 @@ export const useStore = create<State>((set, get) => ({
         const msg = data as Message;
         const key = msg.channel_id
           ? `channel:${msg.channel_id}`
+          : msg.conversation_id
+          ? `conversation:${msg.conversation_id}`
           : `dm:${msg.dm_id}`;
         set((s) => {
           const existing = s.messages[key];
@@ -290,11 +353,14 @@ export const useStore = create<State>((set, get) => ({
           };
         });
         if (msg.dm_id) get().refreshDms();
+        if (msg.conversation_id) get().refreshConversations();
         break;
       }
       case "message.delete": {
         const key = data.channel_id
           ? `channel:${data.channel_id}`
+          : data.conversation_id
+          ? `conversation:${data.conversation_id}`
           : `dm:${data.dm_id}`;
         set((s) => {
           const existing = s.messages[key];
@@ -330,6 +396,9 @@ export const useStore = create<State>((set, get) => ({
       case "dm.open":
         get().refreshDms();
         break;
+      case "conversation.update":
+        get().refreshConversations();
+        break;
       case "board.create":
       case "board.update":
       case "board.delete":
@@ -350,6 +419,8 @@ export const useStore = create<State>((set, get) => ({
       case "typing": {
         const key = data.channel_id
           ? `channel:${data.channel_id}`
+          : data.conversation_id
+          ? `conversation:${data.conversation_id}`
           : `dm:${data.dm_id}`;
         if (data.name === state.user?.name) break;
         set((s) => {

@@ -2,6 +2,8 @@
 // message (/shrug, /me, /poll), others perform a local or API action
 // (/theme, /dm, /topic) and show ephemeral feedback only the sender sees.
 import { api } from "./api";
+import { useStore } from "./store";
+import { generateAndApplyToBoard } from "./kanbanCards";
 import { setTheme, toggleTheme, type Theme } from "./theme";
 import type { User, View } from "./types";
 
@@ -85,6 +87,68 @@ export const COMMANDS: Command[] = [
         opts.map((o, i) => `${NUMS[i] || "•"} ${o}`).join("\n") +
         `\n\n*React with the matching number to vote.*`;
       return ctx.send(body);
+    },
+  },
+  {
+    name: "ask",
+    args: "<question>",
+    description: "Ask the Assistant — it replies here in the channel",
+    run: async (args, ctx) => {
+      const q = args.trim();
+      if (!q) return ctx.addLocal("Usage: /ask <question>");
+      const agent = useStore.getState().agent;
+      if (!agent?.enabled)
+        return ctx.addLocal(
+          "The Assistant isn't enabled yet — an admin can set it up in Settings → Assistant."
+        );
+      // Mentioning the Assistant triggers its inline reply server-side.
+      await ctx.send(`@${agent.name} ${q}`);
+    },
+  },
+  {
+    name: "kanban",
+    args: "<board> <what to create>",
+    description: "Generate kanban cards on a board from a prompt",
+    run: async (args, ctx) => {
+      const { agent, boards, members } = useStore.getState();
+      if (!agent?.enabled)
+        return ctx.addLocal(
+          "The Assistant isn't enabled yet — an admin can set it up in Settings → Assistant."
+        );
+      const kanbans = boards.filter((b) => b.kind === "kanban");
+      const m = args.match(/^(\S+)\s+([\s\S]+)$/);
+      if (!m)
+        return ctx.addLocal(
+          `Usage: /kanban <board> <what to create>. Boards: ${
+            kanbans.map((b) => b.name).join(", ") || "none"
+          }`
+        );
+      const [, boardName, prompt] = m;
+      const board = kanbans.find(
+        (b) => b.name.toLowerCase() === boardName.toLowerCase()
+      );
+      if (!board)
+        return ctx.addLocal(
+          `No kanban board named “${boardName}”. Boards: ${
+            kanbans.map((b) => b.name).join(", ") || "none"
+          }`
+        );
+      ctx.addLocal(`Generating cards for “${board.name}”…`, "bot");
+      try {
+        const n = await generateAndApplyToBoard(
+          board,
+          prompt,
+          members.map((x) => x.name)
+        );
+        ctx.addLocal(
+          n > 0
+            ? `Added ${n} card${n === 1 ? "" : "s"} to “${board.name}” ✓`
+            : `No cards were generated for “${board.name}”.`,
+          "bot"
+        );
+      } catch (e: any) {
+        ctx.addLocal(`Couldn't generate cards: ${e.message || e}`);
+      }
     },
   },
   {

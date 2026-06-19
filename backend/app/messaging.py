@@ -40,6 +40,9 @@ def author_color(name: str, kind: str) -> str:
         bot = db.query_one("SELECT color FROM bots WHERE name = ?", (name,))
         if bot:
             return bot["color"]
+        agent_row = db.query_one("SELECT color FROM agent WHERE id = 1 AND name = ?", (name,))
+        if agent_row:
+            return agent_row["color"]
     user = db.query_one("SELECT color FROM users WHERE name = ?", (name,))
     return user["color"] if user else "#94a3b8"
 
@@ -47,7 +50,11 @@ def author_color(name: str, kind: str) -> str:
 def author_avatar(name: str, kind: str) -> Optional[str]:
     if kind == "bot":
         bot = db.query_one("SELECT avatar FROM bots WHERE name = ?", (name,))
-        return (bot["avatar"] or None) if bot else None
+        if bot:
+            return bot["avatar"] or None
+        agent_row = db.query_one("SELECT avatar FROM agent WHERE id = 1 AND name = ?", (name,))
+        if agent_row:
+            return agent_row["avatar"] or None
     user = db.query_one("SELECT avatar FROM users WHERE name = ?", (name,))
     return (user["avatar"] or None) if user else None
 
@@ -88,6 +95,7 @@ def serialize(row: dict[str, Any]) -> dict[str, Any]:
         "id": row["id"],
         "channel_id": row["channel_id"],
         "dm_id": row["dm_id"],
+        "conversation_id": row["conversation_id"],
         "author": row["author"],
         "kind": row["kind"],
         "content": row["content"],
@@ -147,6 +155,9 @@ def serialize_many(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     users = {u["name"]: u for u in db.query_all("SELECT name, color, avatar FROM users")}
     bots = {b["name"]: b for b in db.query_all("SELECT name, color, avatar FROM bots")}
+    # The Assistant authors bot messages too; treat it like a bot for styling.
+    for a in db.query_all("SELECT name, color, avatar FROM agent WHERE id = 1"):
+        bots.setdefault(a["name"], a)
 
     # Batch-load parents for quote-replies.
     parent_ids = [r["reply_to"] for r in rows if r["reply_to"]]
@@ -183,6 +194,7 @@ def serialize_many(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "id": r["id"],
                 "channel_id": r["channel_id"],
                 "dm_id": r["dm_id"],
+                "conversation_id": r["conversation_id"],
                 "author": r["author"],
                 "kind": r["kind"],
                 "content": r["content"],
@@ -211,8 +223,15 @@ def dm_members(dm_id: int) -> list[str]:
     return [row["user_a"], row["user_b"]] if row else []
 
 
+def conversation_owner(conversation_id: int) -> list[str]:
+    row = db.query_one("SELECT owner FROM conversations WHERE id = ?", (conversation_id,))
+    return [row["owner"]] if row else []
+
+
 async def _broadcast_message(message: dict[str, Any], event: str) -> None:
-    if message["dm_id"]:
+    if message.get("conversation_id"):
+        await hub.send_to_users(conversation_owner(message["conversation_id"]), event, message)
+    elif message["dm_id"]:
         await hub.send_to_users(dm_members(message["dm_id"]), event, message)
     else:
         await hub.broadcast(event, message)
@@ -231,8 +250,13 @@ async def broadcast_delete(row: dict[str, Any]) -> None:
         "id": row["id"],
         "channel_id": row["channel_id"],
         "dm_id": row["dm_id"],
+        "conversation_id": row["conversation_id"],
     }
-    if row["dm_id"]:
+    if row["conversation_id"]:
+        await hub.send_to_users(
+            conversation_owner(row["conversation_id"]), "message.delete", payload
+        )
+    elif row["dm_id"]:
         await hub.send_to_users(dm_members(row["dm_id"]), "message.delete", payload)
     else:
         await hub.broadcast("message.delete", payload)
@@ -245,17 +269,19 @@ async def create_message(
     kind: str = "text",
     channel_id: Optional[int] = None,
     dm_id: Optional[int] = None,
+    conversation_id: Optional[int] = None,
     attachments: Optional[list[dict]] = None,
     reply_to: Optional[int] = None,
 ) -> dict[str, Any]:
     attachments = attachments or []
     message_id = db.execute(
-        "INSERT INTO messages(channel_id, dm_id, author, kind, content, "
+        "INSERT INTO messages(channel_id, dm_id, conversation_id, author, kind, content, "
         "attachments, previews, reply_to, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, '[]', ?, ?)",
+        "VALUES (?, ?, ?, ?, ?, ?, ?, '[]', ?, ?)",
         (
             channel_id,
             dm_id,
+            conversation_id,
             author,
             kind,
             content,
@@ -323,7 +349,9 @@ async def notify_mentions(message: dict[str, Any]) -> None:
 
 
 async def _post_process(message: dict[str, Any]) -> None:
-    await notify_mentions(message)
+    # Private agent threads must not ping other room members.
+    if not message.get("conversation_id"):
+        await notify_mentions(message)
 
     urls = previews.extract_urls(message["content"])
     if urls:
@@ -337,8 +365,9 @@ async def _post_process(message: dict[str, Any]) -> None:
             if updated:
                 await _broadcast_message(updated, "message.update")
 
-    # Avoid bots replying to bots (no infinite loops).
+    # Avoid bots replying to bots (no infinite loops). Channel-only triggers.
     if message["kind"] != "bot" and message["channel_id"]:
-        from . import bots  # lazy import to dodge a cycle
+        from . import agent, bots  # lazy import to dodge a cycle
 
         await bots.maybe_reply(message)
+        await agent.maybe_reply_channel(message)

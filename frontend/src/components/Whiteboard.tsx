@@ -19,6 +19,8 @@ import {
   Maximize2,
   Minimize2,
   ArrowUpToLine,
+  Maximize,
+  Map as MapIcon,
   X,
 } from "lucide-react";
 
@@ -75,13 +77,21 @@ export default function Whiteboard({
   const comments = useMemo(() => collab.doc.getArray<Y.Map<any>>("comments"), [collab]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const miniRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef<Stroke | null>(null);
   const dragImg = useRef<{ m: Y.Map<any>; ox: number; oy: number; startX: number; startY: number } | null>(null);
   const panning = useRef<{ lx: number; ly: number } | null>(null);
+  const miniDrag = useRef(false);
   const imgCache = useRef<Map<string, HTMLImageElement>>(new Map());
   const imageFile = useRef<HTMLInputElement>(null);
+  // View transform maps world coords (the fixed W×H board) → CSS pixels in the
+  // canvas, which now fills its whole container instead of a fixed-ratio box.
   const view = useRef({ scale: 1, x: 0, y: 0 });
+  const fitted = useRef(false);
   const selectedRef = useRef<string | null>(null);
+  // Displayed canvas size in CSS pixels; tracked so overlays re-render on resize.
+  const [size, setSize] = useState({ w: W, h: H });
+  const [showMini, setShowMini] = useState(true);
 
   const [tool, setTool] = useState<Tool>("pen");
   const [color, setColor] = useState(user?.color || "#3b82f6");
@@ -105,22 +115,20 @@ export default function Whiteboard({
   }
 
   // ---- coordinate helpers ------------------------------------------------
+  // CSS pixels relative to the canvas's top-left.
   function toCanvasPx(e: { clientX: number; clientY: number }) {
     const rect = canvasRef.current!.getBoundingClientRect();
-    return [
-      ((e.clientX - rect.left) / rect.width) * W,
-      ((e.clientY - rect.top) / rect.height) * H,
-    ] as [number, number];
+    return [e.clientX - rect.left, e.clientY - rect.top] as [number, number];
   }
   function toWorld(e: { clientX: number; clientY: number }) {
     const [cx, cy] = toCanvasPx(e);
     const v = view.current;
     return [(cx - v.x) / v.scale, (cy - v.y) / v.scale] as [number, number];
   }
-  // World point → percentage of the canvas box, for positioning overlays.
+  // World point → CSS pixel offset in the canvas box, for positioning overlays.
   function project(wx: number, wy: number) {
     const v = view.current;
-    return { left: ((wx * v.scale + v.x) / W) * 100, top: ((wy * v.scale + v.y) / H) * 100 };
+    return { left: wx * v.scale + v.x, top: wy * v.scale + v.y };
   }
 
   function imgById(idv: string): { m: Y.Map<any>; i: number } | null {
@@ -149,7 +157,7 @@ export default function Whiteboard({
     ctx.stroke();
   }
 
-  function drawImage(im: Y.Map<any>, ctx: CanvasRenderingContext2D) {
+  function drawImage(im: Y.Map<any>, ctx: CanvasRenderingContext2D, mini = false) {
     const url = im.get("url") as string;
     let cached = imgCache.current.get(url);
     if (!cached) {
@@ -170,7 +178,7 @@ export default function Whiteboard({
     ctx.translate(cx, cy);
     ctx.rotate(rot);
     ctx.drawImage(cached, -w / 2, -h / 2, w, h);
-    if (selectedRef.current === im.get("id")) {
+    if (!mini && selectedRef.current === im.get("id")) {
       ctx.strokeStyle = "#3b82f6";
       ctx.lineWidth = 2 / view.current.scale;
       ctx.setLineDash([6 / view.current.scale, 4 / view.current.scale]);
@@ -181,15 +189,50 @@ export default function Whiteboard({
   }
 
   function redraw() {
-    const ctx = canvasRef.current?.getContext("2d");
-    if (!ctx) return;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, W, H);
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    const dpr = window.devicePixelRatio || 1;
     const v = view.current;
-    ctx.setTransform(v.scale, 0, 0, v.scale, v.x, v.y);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Subtle board bounds so users can see the extent of the W×H world.
+    ctx.setTransform(dpr * v.scale, 0, 0, dpr * v.scale, dpr * v.x, dpr * v.y);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = "rgba(100,116,139,0.35)";
+    ctx.lineWidth = 1 / v.scale;
+    ctx.strokeRect(0, 0, W, H);
     images.forEach((im) => drawImage(im, ctx));
     strokes.forEach((s) => draw(s, ctx));
     if (drawing.current) draw(drawing.current, ctx);
+    drawMinimap();
+  }
+
+  function drawMinimap() {
+    const mc = miniRef.current;
+    const ctx = mc?.getContext("2d");
+    if (!mc || !ctx) return;
+    // Backing store is a fixed 160×100 (see JSX) — scale the world into it.
+    const s = Math.min(mc.width / W, mc.height / H);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, mc.width, mc.height);
+    // World content, scaled to fit the minimap.
+    ctx.setTransform(s, 0, 0, s, 0, 0);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, W, H);
+    images.forEach((im) => drawImage(im, ctx, true));
+    strokes.forEach((st) => draw(st, ctx));
+    // Current viewport rectangle (the slice of the world on screen).
+    const main = canvasRef.current;
+    const v = view.current;
+    const vx = -v.x / v.scale;
+    const vy = -v.y / v.scale;
+    const vw = (main?.clientWidth || size.w) / v.scale;
+    const vh = (main?.clientHeight || size.h) / v.scale;
+    ctx.lineWidth = 2 / s;
+    ctx.strokeStyle = "#3b82f6";
+    ctx.strokeRect(vx, vy, vw, vh);
   }
 
   async function addImage(file: File | undefined) {
@@ -265,12 +308,40 @@ export default function Whiteboard({
     rerender();
   }
   function zoomButton(factor: number) {
-    zoomAt(W / 2, H / 2, factor);
+    const c = canvasRef.current;
+    zoomAt(c ? c.clientWidth / 2 : size.w / 2, c ? c.clientHeight / 2 : size.h / 2, factor);
   }
-  function resetView() {
-    view.current = { scale: 1, x: 0, y: 0 };
+  // Scale + center the whole W×H board inside the available CSS pixels.
+  function fitInto(cw: number, ch: number) {
+    const scale = Math.min(cw / W, ch / H) * 0.95;
+    view.current = {
+      scale,
+      x: (cw - W * scale) / 2,
+      y: (ch - H * scale) / 2,
+    };
+  }
+  function fitView() {
+    const c = canvasRef.current;
+    fitInto(c?.clientWidth || size.w, c?.clientHeight || size.h);
     redraw();
     rerender();
+  }
+  function centerOnWorld(wx: number, wy: number) {
+    const c = canvasRef.current;
+    const cw = c?.clientWidth || size.w;
+    const ch = c?.clientHeight || size.h;
+    const v = view.current;
+    v.x = cw / 2 - wx * v.scale;
+    v.y = ch / 2 - wy * v.scale;
+    redraw();
+    rerender();
+  }
+  function miniNavigate(e: { clientX: number; clientY: number }) {
+    const mc = miniRef.current;
+    if (!mc) return;
+    const rect = mc.getBoundingClientRect();
+    const s = Math.min(rect.width / W, rect.height / H);
+    centerOnWorld((e.clientX - rect.left) / s, (e.clientY - rect.top) / s);
   }
 
   useEffect(() => {
@@ -279,12 +350,36 @@ export default function Whiteboard({
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const rect = el.getBoundingClientRect();
-      const cx = ((e.clientX - rect.left) / rect.width) * W;
-      const cy = ((e.clientY - rect.top) / rect.height) * H;
-      zoomAt(cx, cy, e.deltaY < 0 ? 1.1 : 1 / 1.1);
+      zoomAt(e.clientX - rect.left, e.clientY - rect.top, e.deltaY < 0 ? 1.1 : 1 / 1.1);
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep the canvas backing store matched to its CSS size (DPR-aware) so the
+  // board fills the whole container and stays crisp when the panel is resized.
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const sync = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (!w || !h) return;
+      const dpr = window.devicePixelRatio || 1;
+      el.width = Math.round(w * dpr);
+      el.height = Math.round(h * dpr);
+      setSize((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
+      if (!fitted.current) {
+        fitted.current = true;
+        fitInto(w, h);
+      }
+      redraw();
+    };
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    return () => ro.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -589,68 +684,63 @@ export default function Whiteboard({
         </div>
       </header>
 
-      <div className="relative min-h-0 flex-1 overflow-hidden p-4">
-        <div className="grid h-full place-items-center">
-          <div className="relative max-h-full" style={{ width: "100%", aspectRatio: `${W} / ${H}` }}>
-            <canvas
-              ref={canvasRef}
-              width={W}
-              height={H}
-              onPointerDown={onDown}
-              onPointerMove={onMove}
-              onPointerUp={onUp}
-              onPointerLeave={onLeave}
-              className="absolute inset-0 h-full w-full touch-none rounded-xl border border-[var(--c-border)] bg-white shadow-sm"
-              style={{ cursor: cursorStyle }}
-            />
+      <div className="relative min-h-0 flex-1 overflow-hidden bg-[var(--c-bg)]">
+        <canvas
+          ref={canvasRef}
+          onPointerDown={onDown}
+          onPointerMove={onMove}
+          onPointerUp={onUp}
+          onPointerLeave={onLeave}
+          className="absolute inset-0 h-full w-full touch-none"
+          style={{ cursor: cursorStyle }}
+        />
 
-            {/* Remote cursors */}
-            <div className="pointer-events-none absolute inset-0 overflow-hidden">
-              {cursors.map((c) => {
-                const p = project(c.x, c.y);
-                return (
-                  <div key={c.id} className="absolute" style={{ left: `${p.left}%`, top: `${p.top}%` }}>
-                    <div
-                      className="h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow"
-                      style={{ background: c.color }}
-                    />
-                    <div
-                      className="absolute left-2 top-2 whitespace-nowrap rounded px-1 text-[10px] font-medium text-white shadow"
-                      style={{ background: c.color }}
-                    >
-                      {c.name}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+        {/* Remote cursors */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          {cursors.map((c) => {
+            const p = project(c.x, c.y);
+            return (
+              <div key={c.id} className="absolute" style={{ left: p.left, top: p.top }}>
+                <div
+                  className="h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow"
+                  style={{ background: c.color }}
+                />
+                <div
+                  className="absolute left-2 top-2 whitespace-nowrap rounded px-1 text-[10px] font-medium text-white shadow"
+                  style={{ background: c.color }}
+                >
+                  {c.name}
+                </div>
+              </div>
+            );
+          })}
+        </div>
 
-            {/* Comment pins (container ignores pointers; pins opt back in) */}
-            <div className="pointer-events-none absolute inset-0 overflow-hidden">
-              {comments.toArray().map((m) => {
-                const cid = m.get("id") as string;
-                const p = project(m.get("x"), m.get("y"));
-                if (p.left < -5 || p.left > 105 || p.top < -5 || p.top > 105) return null;
-                const cc = (m.get("color") as string) || "#8b5cf6";
-                return (
-                  <button
-                    key={cid}
-                    className="pointer-events-auto absolute -translate-x-1/2 -translate-y-full"
-                    style={{ left: `${p.left}%`, top: `${p.top}%` }}
-                    onClick={() => setEditComment(cid)}
-                    title={`${m.get("author")}: ${m.get("text") || "(empty)"}`}
-                  >
-                    <span
-                      className="grid h-7 w-7 place-items-center rounded-full rounded-bl-none border-2 border-white text-white shadow-md"
-                      style={{ background: cc }}
-                    >
-                      <MessageCircle size={14} />
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+        {/* Comment pins (container ignores pointers; pins opt back in) */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          {comments.toArray().map((m) => {
+            const cid = m.get("id") as string;
+            const p = project(m.get("x"), m.get("y"));
+            if (p.left < -40 || p.left > size.w + 40 || p.top < -40 || p.top > size.h + 40)
+              return null;
+            const cc = (m.get("color") as string) || "#8b5cf6";
+            return (
+              <button
+                key={cid}
+                className="pointer-events-auto absolute -translate-x-1/2 -translate-y-full"
+                style={{ left: p.left, top: p.top }}
+                onClick={() => setEditComment(cid)}
+                title={`${m.get("author")}: ${m.get("text") || "(empty)"}`}
+              >
+                <span
+                  className="grid h-7 w-7 place-items-center rounded-full rounded-bl-none border-2 border-white text-white shadow-md"
+                  style={{ background: cc }}
+                >
+                  <MessageCircle size={14} />
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Selected-image action bar */}
@@ -665,13 +755,44 @@ export default function Whiteboard({
           </div>
         )}
 
-        {/* Zoom controls */}
+        {/* Minimap */}
+        {showMini && (
+          <div className="card absolute bottom-16 right-5 z-10 overflow-hidden p-1 fade-in">
+            <canvas
+              ref={miniRef}
+              width={160}
+              height={100}
+              onPointerDown={(e) => {
+                miniDrag.current = true;
+                (e.target as Element).setPointerCapture(e.pointerId);
+                miniNavigate(e);
+              }}
+              onPointerMove={(e) => miniDrag.current && miniNavigate(e)}
+              onPointerUp={() => (miniDrag.current = false)}
+              className="block cursor-pointer rounded"
+              style={{ width: 160, height: 100 }}
+              title="Minimap — click or drag to navigate"
+            />
+          </div>
+        )}
+
+        {/* Zoom + view controls */}
         <div className="card absolute bottom-5 right-5 z-10 flex items-center gap-0.5 p-1 text-xs">
           <ActBtn onClick={() => zoomButton(1 / 1.2)} title="Zoom out"><ZoomOut size={15} /></ActBtn>
-          <button className="w-12 text-center tabular-nums text-[var(--c-muted)]" onClick={resetView} title="Reset view">
+          <button className="w-12 text-center tabular-nums text-[var(--c-muted)]" onClick={fitView} title="Fit board to view">
             {scalePct}%
           </button>
           <ActBtn onClick={() => zoomButton(1.2)} title="Zoom in"><ZoomIn size={15} /></ActBtn>
+          <ActBtn onClick={fitView} title="Fit board to view"><Maximize size={15} /></ActBtn>
+          <button
+            onClick={() => setShowMini((v) => !v)}
+            title={showMini ? "Hide minimap" : "Show minimap"}
+            className={`grid h-8 w-8 place-items-center rounded-lg transition hover:bg-[var(--c-elevated)] ${
+              showMini ? "text-[var(--c-accent)]" : "text-[var(--c-muted)] hover:text-[var(--c-text)]"
+            }`}
+          >
+            <MapIcon size={15} />
+          </button>
         </div>
 
         {/* Minecraft-style tool hotbar */}
@@ -723,8 +844,8 @@ export default function Whiteboard({
             <div
               className="card absolute z-20 w-64 p-2 shadow-2xl fade-in"
               style={{
-                left: `min(max(${p.left}%, 9rem), calc(100% - 9rem))`,
-                top: `min(max(${p.top}%, 1rem), calc(100% - 12rem))`,
+                left: `min(max(${p.left}px, 9rem), calc(100% - 9rem))`,
+                top: `min(max(${p.top}px, 1rem), calc(100% - 12rem))`,
                 transform: "translate(-50%, 8px)",
               }}
             >

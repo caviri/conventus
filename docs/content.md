@@ -379,6 +379,10 @@ Use the admin password in the same `"password"` field to get an **admin** token
 | `POST /api/boards`             | `{kind, name}` (`canvas`/`whiteboard`/`kanban`) |
 | `PATCH /api/boards/{id}`       | `{name}`                                       |
 | `DELETE /api/boards/{id}` 🔒   | Removes the board + its collab log            |
+| `GET  /api/boards/{id}/content`  | Kanban → `{columns, cards}`; live document → `{text}` |
+| `POST /api/boards/{id}/cards`    | Kanban: add a card `{text, col?, tags?, assignee?, due?, image?, link?}` |
+| `POST /api/boards/{id}/columns`  | Kanban: add a column `{title}`                |
+| `POST /api/boards/{id}/append`   | Live document: append `{text}`                |
 | `POST /api/files`              | multipart `file=` → metadata                  |
 | `GET  /api/files`              | The Drive listing                             |
 | `GET  /api/files/{id}/raw`     | Stream a file (`?download=true` to download)  |
@@ -402,6 +406,155 @@ Use the admin password in the same `"password"` field to get an **admin** token
 
 > 🔒 = requires an admin token. The same token authorizes the realtime
 > `/ws?token=…` (presence + messages) and `/collab/{doc}?token=…` (Yjs) sockets.
+
+---
+
+## Building bots & agents
+
+There are two ways to put an LLM in a room, and they answer different needs.
+
+| | **A · Built-in bot** | **B · Your own agent** |
+| --- | --- | --- |
+| Where it runs | Inside the Conventus server | Any process that can reach the API |
+| You write | Nothing — just config | A small script |
+| Good for | "Drop an OpenAI-compatible persona in a channel" | Tools, retrieval, multi-step logic, your own framework (e.g. **PydanticAI**) |
+
+Both talk to the **same** OpenAI-compatible chat API on one side and the **same**
+Conventus REST API on the other — there's no special "bot account". A bot is
+just a user with a name and a token.
+
+### Option A — A built-in bot (no code)
+
+Conventus can call any **OpenAI-compatible** `/chat/completions` endpoint for
+you. Add a bot from the **admin panel**, or with one admin call:
+
+```bash
+URL=http://localhost:7860
+ADMIN_TOKEN=$(curl -s $URL/api/auth/login -H 'content-type: application/json' \
+  -d '{"password":"admin","name":"admin"}' | jq -r .token)
+
+curl $URL/api/bots -X POST -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'content-type: application/json' -d '{
+    "name": "helper",
+    "base_url": "https://api.openai.com/v1",
+    "api_key": "sk-…",
+    "model": "gpt-4o-mini",
+    "system_prompt": "You are a concise, friendly room assistant.",
+    "trigger": "mention",
+    "channels": []
+  }'
+```
+
+- **`base_url`** is anything that speaks the OpenAI protocol — OpenAI, Together,
+  Groq, or a local **Ollama** / **LM Studio** / **vLLM** at e.g.
+  `http://localhost:11434/v1`.
+- **`trigger`** is `mention` (only replies when its name appears) or `all`
+  (replies to every message). **`channels`** is a list of channel ids, or `[]`
+  for every channel.
+- The server streams the answer token-by-token (you watch it type), and feeds
+  the **last ~20 messages** of the channel as context. Bots never reply to other
+  bots, so they can't loop.
+
+That's the whole setup — no process to run, nothing to keep alive.
+
+### Option B — Your own agent over the API (PydanticAI)
+
+Reach for this when you want more than a chat persona: tools/function-calling,
+retrieval, memory, or any orchestration framework. Your agent is just an API
+client that **logs in → watches messages → posts replies**. Here's a complete
+one built on [PydanticAI](https://ai.pydantic.dev), named `BOT_AGENT`:
+
+```python
+# pip install pydantic-ai httpx
+import asyncio, os, httpx
+from pydantic_ai import Agent
+from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.providers.openai import OpenAIProvider
+
+# --- Conventus connection ---
+CONVENTUS_URL = os.environ.get("CONVENTUS_URL", "http://localhost:7860")
+ROOM_PASSWORD = os.environ["CONVENTUS_PASSWORD"]      # room (or reserved-name) password
+BOT_NAME      = os.environ.get("BOT_NAME", "pybot")
+CHANNEL_ID    = int(os.environ.get("CHANNEL_ID", "1"))
+
+# --- The model (any OpenAI-compatible endpoint) ---
+BOT_AGENT = Agent(
+    OpenAIModel(
+        os.environ.get("MODEL", "gpt-4o-mini"),
+        provider=OpenAIProvider(
+            base_url=os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+            api_key=os.environ["OPENAI_API_KEY"],
+        ),
+    ),
+    system_prompt="You are pybot, a concise, friendly helper living in a chat room.",
+)
+
+async def main():
+    async with httpx.AsyncClient(base_url=CONVENTUS_URL, timeout=60) as http:
+        # 1. Log in like any user — the returned token authorizes every call.
+        r = await http.post("/api/auth/login",
+                            json={"name": BOT_NAME, "password": ROOM_PASSWORD})
+        r.raise_for_status()
+        http.headers["Authorization"] = f"Bearer {r.json()['token']}"
+
+        # 2. Start from "now" so we only answer messages that arrive after launch.
+        seen = await http.get(f"/api/channels/{CHANNEL_ID}/messages",
+                              params={"limit": 50})
+        last_id = max((m["id"] for m in seen.json()), default=0)
+        print(f"{BOT_NAME} listening on channel {CHANNEL_ID}…")
+
+        # 3. Poll for new messages, answer the ones addressed to us.
+        while True:
+            await asyncio.sleep(2)
+            rows = (await http.get(f"/api/channels/{CHANNEL_ID}/messages",
+                                   params={"limit": 50})).json()
+            for m in sorted(rows, key=lambda x: x["id"]):
+                if m["id"] <= last_id:
+                    continue
+                last_id = m["id"]
+                # Skip our own + system/bot lines (prevents loops), gate on mention.
+                if m["author"] == BOT_NAME or m["kind"] != "text":
+                    continue
+                if BOT_NAME.lower() not in m["content"].lower():
+                    continue
+                result = await BOT_AGENT.run(m["content"])
+                await http.post(f"/api/channels/{CHANNEL_ID}/messages",
+                                json={"content": result.output, "reply_to": m["id"]})
+
+asyncio.run(main())
+```
+
+```bash
+export CONVENTUS_PASSWORD=conventus OPENAI_API_KEY=sk-…
+python bot_agent.py
+```
+
+> PydanticAI moves fast: on older versions read `result.data` instead of
+> `result.output`, and the model class may be `OpenAIChatModel`.
+
+A few notes:
+
+- **It runs anywhere** — on the server box, in a sidecar container, or your
+  laptop — it only needs to reach `CONVENTUS_URL`. Keep it alive with systemd,
+  a container `restart: always`, or a `while` wrapper.
+- **Reserve the name** so nobody else can log in as your bot: an admin calls
+  `POST /api/admin/reserve {name, password}`, then set `CONVENTUS_PASSWORD` to
+  that password. Give it an avatar/colour via `POST /api/members/avatar`.
+- **Tools & memory** are just PydanticAI features — add `@BOT_AGENT.tool`
+  functions (search the Drive, hit `GET /api/search`, call your own services)
+  and PydanticAI will let the model call them before it answers.
+- **Want it instant instead of polling?** Connect to `ws(s)://<host>/ws?token=…`
+  and react to `{"event":"message","data":{…}}` frames — the same socket the UI
+  uses — instead of the 2-second poll. Polling is simpler and perfectly fine to
+  start.
+- **DMs work the same** — swap the channel endpoints for `GET/POST
+  /api/dms/{id}/messages` (open one first with `POST /api/dms {with}`), so you
+  can have a private 1:1 agent.
+
+**Which should I use?** If you just want an LLM to chat in a channel, use a
+built-in bot — it's zero-maintenance and streams. If you need it to *do things*
+(call tools, look things up, follow your own logic), write an agent with Option
+B.
 
 ---
 

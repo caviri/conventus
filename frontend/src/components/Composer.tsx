@@ -35,6 +35,8 @@ export default function Composer({
   const endpoint =
     view.type === "channel"
       ? `/api/channels/${view.id}/messages`
+      : view.type === "conversation"
+      ? `/api/conversations/${(view as any).id}/messages`
       : `/api/dms/${(view as any).id}/messages`;
 
   // The command palette shows while typing a bare command token (no space yet).
@@ -77,6 +79,33 @@ export default function Composer({
     } finally {
       setUploading(false);
     }
+  }
+
+  // Pull any files/images off a clipboard or drag payload and upload them.
+  // Returns true if at least one file was handled (so callers can swallow the
+  // default paste when it was purely an image/file).
+  function filesFromData(dt: DataTransfer | null): File[] {
+    if (!dt) return [];
+    const out: File[] = [];
+    if (dt.items && dt.items.length) {
+      for (const item of Array.from(dt.items)) {
+        if (item.kind === "file") {
+          const f = item.getAsFile();
+          if (f) out.push(f);
+        }
+      }
+    }
+    if (!out.length && dt.files && dt.files.length) out.push(...Array.from(dt.files));
+    return out;
+  }
+
+  function onPaste(e: React.ClipboardEvent) {
+    const files = filesFromData(e.clipboardData);
+    if (files.length === 0) return; // plain text — let the textarea handle it
+    e.preventDefault();
+    const list = new DataTransfer();
+    files.forEach((f) => list.items.add(f));
+    handleFiles(list.files);
   }
 
   function resetInput() {
@@ -154,7 +183,8 @@ export default function Composer({
     ta.style.height = "auto";
     ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
     const now = Date.now();
-    if (now - lastTyping.current > 1500) {
+    // Private agent threads have no one else to notify, so skip typing there.
+    if (now - lastTyping.current > 1500 && view.type !== "conversation") {
       lastTyping.current = now;
       sendTyping(
         view.type === "channel"
@@ -278,6 +308,7 @@ export default function Composer({
             value={text}
             onChange={onChange}
             onKeyDown={onKeyDown}
+            onPaste={onPaste}
             placeholder={
               widgetMode ? "Paste HTML — sandboxed widget…" : "Write a message…"
             }

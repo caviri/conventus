@@ -48,9 +48,10 @@ CREATE TABLE IF NOT EXISTS dms (
 );
 
 CREATE TABLE IF NOT EXISTS messages (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    channel_id  INTEGER,
-    dm_id       INTEGER,
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel_id      INTEGER,
+    dm_id           INTEGER,
+    conversation_id INTEGER,                    -- private agent thread (owner-scoped)
     author      TEXT NOT NULL,
     kind        TEXT NOT NULL DEFAULT 'text',   -- text | system | bot
     content     TEXT NOT NULL DEFAULT '',
@@ -63,6 +64,7 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel_id, id);
 CREATE INDEX IF NOT EXISTS idx_messages_dm ON messages(dm_id, id);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, id);
 
 CREATE TABLE IF NOT EXISTS reactions (
     message_id  INTEGER NOT NULL,
@@ -126,6 +128,32 @@ CREATE TABLE IF NOT EXISTS bots (
     enabled       INTEGER NOT NULL DEFAULT 1,
     created_at    REAL NOT NULL
 );
+
+-- The room's single configurable Assistant (one row, id = 1). Powers private
+-- conversations, the channel @mention trigger, live-doc completion and kanban fill.
+CREATE TABLE IF NOT EXISTS agent (
+    id            INTEGER PRIMARY KEY CHECK (id = 1),
+    name          TEXT NOT NULL DEFAULT 'Assistant',
+    base_url      TEXT NOT NULL DEFAULT 'https://api.openai.com/v1',
+    api_key       TEXT NOT NULL DEFAULT '',
+    model         TEXT NOT NULL DEFAULT 'gpt-4o-mini',
+    model_type    TEXT NOT NULL DEFAULT 'standard',  -- standard | reasoning
+    system_prompt TEXT NOT NULL DEFAULT '',
+    color         TEXT NOT NULL DEFAULT '#8b5cf6',
+    avatar        TEXT NOT NULL DEFAULT '✨',
+    enabled       INTEGER NOT NULL DEFAULT 0
+);
+
+-- Private 1:1 threads between a user and the Assistant (ChatGPT-style).
+CREATE TABLE IF NOT EXISTS conversations (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner         TEXT NOT NULL,
+    title         TEXT NOT NULL DEFAULT 'New conversation',
+    system_prompt TEXT NOT NULL DEFAULT '',      -- per-thread override of the agent base prompt
+    created_at    REAL NOT NULL,
+    updated_at    REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_conversations_owner ON conversations(owner, id);
 """
 
 # Lightweight additive migrations for databases created by older versions.
@@ -133,6 +161,8 @@ MIGRATIONS = [
     ("bots", "avatar", "TEXT NOT NULL DEFAULT ''"),
     ("messages", "reply_to", "INTEGER"),
     ("messages", "pinned", "INTEGER NOT NULL DEFAULT 0"),
+    ("messages", "conversation_id", "INTEGER"),
+    ("agent", "model_type", "TEXT NOT NULL DEFAULT 'standard'"),
     ("users", "status", "TEXT NOT NULL DEFAULT ''"),
     ("users", "avatar", "TEXT NOT NULL DEFAULT ''"),
     ("channels", "folder_id", "INTEGER"),
@@ -188,6 +218,8 @@ def init() -> None:
                 "INSERT INTO boards(kind, name, created_at) VALUES ('whiteboard', 'Whiteboard', ?)",
                 (now,),
             )
+        # The single Assistant row (disabled until an admin configures it).
+        conn.execute("INSERT OR IGNORE INTO agent(id) VALUES (1)")
 
 
 def _exec(query: str, params: Iterable[Any] = ()) -> sqlite3.Cursor:
