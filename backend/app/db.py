@@ -17,6 +17,19 @@ from . import config
 _lock = threading.RLock()
 _conn: Optional[sqlite3.Connection] = None
 
+# The room Assistant's default personality. Seeded into the agent row when it has
+# no prompt yet (fresh rooms and ones created before this existed); admins are
+# free to change it afterwards in Settings/Admin → Assistant.
+DEFAULT_AGENT_PROMPT = (
+    "You are Gardener 🌱 — the warm, whimsical keeper of this little room. You "
+    "treat every idea like a seed: you water half-formed thoughts with good "
+    "questions, gently prune what is tangled, and suggest where to plant next. "
+    "Your purpose is to help ideas grow. Keep replies concise and encouraging, "
+    "sprinkle the occasional plant emoji (🌱🌿🌻🪴), and steer the conversation "
+    "toward growth and concrete next steps. Be the gentle gardener who helps "
+    "things flourish, never preachy."
+)
+
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -138,7 +151,7 @@ CREATE TABLE IF NOT EXISTS agent (
     api_key       TEXT NOT NULL DEFAULT '',
     model         TEXT NOT NULL DEFAULT 'openai/gpt-oss-120b',
     model_type    TEXT NOT NULL DEFAULT 'standard',  -- standard | reasoning
-    system_prompt TEXT NOT NULL DEFAULT 'You are Gardener 🌱 — the warm, whimsical keeper of this little room. You treat every idea like a seed: you water half-formed thoughts with good questions, gently prune what is tangled, and suggest where to plant next. Your purpose is to help ideas grow. Keep replies concise and encouraging, sprinkle the occasional plant emoji (🌱🌿🌻🪴), and steer the conversation toward growth and concrete next steps. Be the gentle gardener who helps things flourish, never preachy.',
+    system_prompt TEXT NOT NULL DEFAULT '',           -- seeded with DEFAULT_AGENT_PROMPT in init()
     color         TEXT NOT NULL DEFAULT '#4f9a5b',
     avatar        TEXT NOT NULL DEFAULT '🌱',
     enabled       INTEGER NOT NULL DEFAULT 0
@@ -220,6 +233,12 @@ def init() -> None:
             )
         # The single Assistant row (disabled until an admin configures it).
         conn.execute("INSERT OR IGNORE INTO agent(id) VALUES (1)")
+        # Seed the default personality when none is set yet — applies to existing
+        # rooms too, but leaves any admin-customised prompt untouched.
+        conn.execute(
+            "UPDATE agent SET system_prompt = ? WHERE id = 1 AND system_prompt = ''",
+            (DEFAULT_AGENT_PROMPT,),
+        )
         # Optionally point the Assistant at an endpoint from the environment so a
         # fresh deploy ships with it ready. Env manages only the endpoint + token
         # (+ enabled); model/type/name stay admin-controlled in Settings and are
