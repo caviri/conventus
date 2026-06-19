@@ -22,12 +22,14 @@ import {
   ChevronRight,
   ChevronDown,
   Sparkles,
+  Radio,
 } from "lucide-react";
 
 const BOARD_KIND = {
   canvas: { label: "live document", icon: FileText },
   whiteboard: { label: "whiteboard", icon: Pencil },
   kanban: { label: "kanban", icon: Columns3 },
+  room: { label: "voice room", icon: Radio },
 } as const;
 
 function boardIcon(kind: BoardKind, size = 16) {
@@ -288,6 +290,12 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
                   onClick={() => createBoard("kanban")}
                 >
                   <Columns3 size={15} /> New kanban
+                </button>
+                <button
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--c-elevated)]"
+                  onClick={() => createBoard("room")}
+                >
+                  <Radio size={15} /> New voice room
                 </button>
                 <div className="my-1 border-t border-[var(--c-border)]" />
                 <button

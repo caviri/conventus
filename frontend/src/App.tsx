@@ -12,6 +12,7 @@ import Drive from "./components/Drive";
 import Canvas from "./components/Canvas";
 import Whiteboard from "./components/Whiteboard";
 import Kanban from "./components/Kanban";
+import Room from "./components/Room";
 import Settings from "./components/Settings";
 import AdminPanel from "./components/AdminPanel";
 import Search from "./components/Search";
@@ -109,7 +110,10 @@ export default function App() {
   if (!user) return <Login />;
 
   const board =
-    view.type === "canvas" || view.type === "whiteboard" || view.type === "kanban"
+    view.type === "canvas" ||
+    view.type === "whiteboard" ||
+    view.type === "kanban" ||
+    view.type === "room"
       ? boards.find((b) => b.id === view.id)
       : undefined;
 
@@ -159,6 +163,10 @@ export default function App() {
         ) : view.type === "kanban" ? (
           board && (
             <Kanban key={board.doc} id={board.id} name={board.doc} title={board.name} />
+          )
+        ) : view.type === "room" ? (
+          board && (
+            <Room key={board.doc} id={board.id} name={board.doc} title={board.name} />
           )
         ) : view.type === "settings" ? (
           <Settings />

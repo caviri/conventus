@@ -140,7 +140,7 @@ export interface SearchResult extends Message {
   location: SearchLocation;
 }
 
-export type BoardKind = "canvas" | "whiteboard" | "kanban";
+export type BoardKind = "canvas" | "whiteboard" | "kanban" | "room";
 
 export interface Board {
   id: number;
@@ -158,5 +158,6 @@ export type View =
   | { type: "canvas"; id: number }
   | { type: "whiteboard"; id: number }
   | { type: "kanban"; id: number }
+  | { type: "room"; id: number }
   | { type: "settings" }
   | { type: "admin" };
