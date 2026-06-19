@@ -191,6 +191,12 @@ export function renderContent(text: string): string {
     (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`
   );
   work = work.replace(/(^|\s)(@[\w.\-]+)/g, '$1<span class="mention">$2</span>');
+  // #channel tags → clickable links (App handles navigation by name). The single
+  // "#" + word here never collides with "# heading" (which needs a space).
+  work = work.replace(
+    /(^|\s)#([\w][\w.\-]*)/g,
+    '$1<a class="hashtag" data-channel="$2">#$2</a>'
+  );
 
   // Newlines → <br/>, but not directly after a block-level element.
   work = work.replace(/\n/g, "<br/>");

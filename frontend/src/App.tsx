@@ -87,18 +87,28 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [user, setSearchOpen]);
 
-  // Open markdown images (rendered as raw HTML) in the lightbox on click.
+  // Open markdown images in the lightbox, and navigate on #channel-tag clicks.
   useEffect(() => {
     if (!user) return;
     const onClick = (e: MouseEvent) => {
       const t = e.target as HTMLElement;
       if (t instanceof HTMLImageElement && t.classList.contains("md-media")) {
         setLightbox({ url: t.src });
+        return;
+      }
+      const tag = t.closest?.(".hashtag") as HTMLElement | null;
+      if (tag?.dataset.channel) {
+        const wanted = tag.dataset.channel.toLowerCase();
+        const ch = useStore.getState().channels.find((c) => c.name.toLowerCase() === wanted);
+        if (ch) {
+          e.preventDefault();
+          setView({ type: "channel", id: ch.id });
+        }
       }
     };
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);
-  }, [user, setLightbox]);
+  }, [user, setLightbox, setView]);
 
   // Touch gestures (phones): edge-swipe right to open the sidebar, swipe left to
   // close it. The open gesture must start near the left edge so it doesn't fight

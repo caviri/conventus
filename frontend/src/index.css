@@ -211,6 +211,14 @@ html {
   padding: 0 3px;
   font-weight: 500;
 }
+.msg-content .hashtag {
+  color: var(--c-accent);
+  font-weight: 500;
+  cursor: pointer;
+}
+.msg-content .hashtag:hover {
+  text-decoration: underline;
+}
 .msg-content .md-media {
   display: block;
   max-width: 100%;
