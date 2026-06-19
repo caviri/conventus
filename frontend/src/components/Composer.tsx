@@ -3,6 +3,7 @@ import { api } from "../api";
 import { useStore } from "../store";
 import { sendTyping } from "../ws";
 import { matchCommands, runCommand, type CommandContext } from "../commands";
+import MediaCapture from "./MediaCapture";
 import type { FileItem, View } from "../types";
 import { formatBytes } from "../format";
 import { Paperclip, SendHorizontal, X, Loader2, Code2 } from "lucide-react";
@@ -397,6 +398,7 @@ export default function Composer({
           >
             <Code2 size={18} />
           </button>
+          <MediaCapture onAttach={(f) => setAttachments((a) => [...a, f])} />
           <textarea
             ref={taRef}
             rows={1}
