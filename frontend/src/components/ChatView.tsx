@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useStore, viewKey } from "../store";
 import { api } from "../api";
 import Message from "./Message";
@@ -114,12 +114,18 @@ export default function ChatView() {
     }
   }
 
-  const typingNames = useMemo(() => {
-    const now = Date.now();
-    return (typing[key] || [])
-      .filter((t) => now - t.at < 5000 && t.name !== user?.name)
-      .map((t) => t.name);
-  }, [typing, key, user]);
+  // Re-render once a second while anyone's typing so stale indicators (e.g. a
+  // bot that pinged "typing" but errored before replying) age out via the 5s rule.
+  const [, typingTick] = useState(0);
+  useEffect(() => {
+    if (!(typing[key]?.length)) return;
+    const t = setInterval(() => typingTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [typing, key]);
+
+  const typingNames = (typing[key] || [])
+    .filter((t) => Date.now() - t.at < 5000 && t.name !== user?.name)
+    .map((t) => t.name);
 
   async function saveTopic() {
     if (!channel) return;

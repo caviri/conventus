@@ -358,9 +358,13 @@ export const useStore = create<State>((set, get) => ({
             event === "message" && !isCurrent && msg.author !== s.user?.name
               ? { ...s.unread, [key]: (s.unread[key] || 0) + 1 }
               : s.unread;
+          // A message from someone means they're no longer typing — clear them
+          // (this is what stops the Assistant's "…is typing" once its reply lands).
+          const stillTyping = (s.typing[key] || []).filter((t) => t.name !== msg.author);
           return {
             messages: next ? { ...s.messages, [key]: next } : s.messages,
             unread,
+            typing: { ...s.typing, [key]: stillTyping },
           };
         });
         if (msg.dm_id) get().refreshDms();

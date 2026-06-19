@@ -133,14 +133,14 @@ CREATE TABLE IF NOT EXISTS bots (
 -- conversations, the channel @mention trigger, live-doc completion and kanban fill.
 CREATE TABLE IF NOT EXISTS agent (
     id            INTEGER PRIMARY KEY CHECK (id = 1),
-    name          TEXT NOT NULL DEFAULT 'Assistant',
+    name          TEXT NOT NULL DEFAULT 'Gardener',
     base_url      TEXT NOT NULL DEFAULT 'https://api.openai.com/v1',
     api_key       TEXT NOT NULL DEFAULT '',
     model         TEXT NOT NULL DEFAULT 'openai/gpt-oss-120b',
     model_type    TEXT NOT NULL DEFAULT 'standard',  -- standard | reasoning
-    system_prompt TEXT NOT NULL DEFAULT '',
-    color         TEXT NOT NULL DEFAULT '#8b5cf6',
-    avatar        TEXT NOT NULL DEFAULT '✨',
+    system_prompt TEXT NOT NULL DEFAULT 'You are Gardener 🌱 — the warm, whimsical keeper of this little room. You treat every idea like a seed: you water half-formed thoughts with good questions, gently prune what is tangled, and suggest where to plant next. Your purpose is to help ideas grow. Keep replies concise and encouraging, sprinkle the occasional plant emoji (🌱🌿🌻🪴), and steer the conversation toward growth and concrete next steps. Be the gentle gardener who helps things flourish, never preachy.',
+    color         TEXT NOT NULL DEFAULT '#4f9a5b',
+    avatar        TEXT NOT NULL DEFAULT '🌱',
     enabled       INTEGER NOT NULL DEFAULT 0
 );
 
