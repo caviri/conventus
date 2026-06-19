@@ -66,6 +66,7 @@ interface State {
   refreshConversations: () => Promise<void>;
   newConversation: (title?: string) => Promise<void>;
   openConversation: (id: number) => Promise<void>;
+  openAgentChat: () => Promise<void>;
   renameConversation: (id: number, title: string) => Promise<void>;
   setConversationPrompt: (id: number, systemPrompt: string) => Promise<void>;
   deleteConversation: (id: number) => Promise<void>;
@@ -216,6 +217,15 @@ export const useStore = create<State>((set, get) => ({
   },
   async openConversation(id) {
     await get().setView({ type: "conversation", id });
+  },
+  // Open the single ongoing chat with the Assistant — reuse the most recent
+  // conversation instead of spawning a new one each time; create one only if
+  // none exists yet.
+  async openAgentChat() {
+    await get().refreshConversations();
+    const existing = get().conversations[0];
+    if (existing) await get().setView({ type: "conversation", id: existing.id });
+    else await get().newConversation();
   },
   async renameConversation(id, title) {
     await api.patch(`/api/conversations/${id}`, { title });

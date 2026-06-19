@@ -56,9 +56,8 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
     roomName,
     channels,
     dms,
-    conversations,
     agent,
-    newConversation,
+    openAgentChat,
     members,
     view,
     unread,
@@ -161,8 +160,16 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
   }
 
   const active = viewKey(view);
-  const others = members.filter((m) => m.name !== user?.name);
+  const convUnread = Object.entries(unread)
+    .filter(([k]) => k.startsWith("conversation:"))
+    .reduce((sum, [, n]) => sum + (n || 0), 0);
+  // The Members list IS the people list — DMs are reached by clicking a member.
+  // The Assistant has its own entry, so keep it out of here.
+  const others = members.filter((m) => m.name !== user?.name && !m.is_agent);
   const me = members.find((m) => m.name === user?.name);
+  const dmFor = (name?: string) => dms.find((d) => d.with === name);
+  const selfDm = dmFor(user?.name);
+  const selfUnread = selfDm ? unread[`dm:${selfDm.id}`] || 0 : 0;
 
   // --- Row renderers (draggable) ------------------------------------------
   const channelRow = (c: Channel) => {
@@ -391,92 +398,38 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
         )}
         {ungroupedBoards.map(boardRow)}
 
-        {/* DMs */}
-        {dms.length > 0 && (
-          <div className="mb-1 mt-4 px-2 text-xs font-semibold uppercase tracking-wide text-[var(--c-muted)]">
-            Direct messages
-          </div>
-        )}
-        {dms.map((d) => {
-          const k = `dm:${d.id}`;
-          return (
-            <button
-              key={d.id}
-              onClick={() => go({ type: "dm", id: d.id })}
-              className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition ${
-                active === k
-                  ? "bg-[var(--c-accent-soft)]"
-                  : "text-[var(--c-muted)] hover:bg-[var(--c-elevated)]"
-              }`}
-            >
-              <Dot color={d.online ? "#34d399" : "#475569"} />
-              <span className="truncate">{d.with}</span>
-              {unread[k] > 0 && active !== k && (
-                <span className="ml-auto rounded-full bg-[var(--c-accent)] px-1.5 text-xs text-white">
-                  {unread[k]}
-                </span>
-              )}
-            </button>
-          );
-        })}
-
-        {/* Assistant conversations */}
-        <div className="mb-1 mt-4 flex items-center justify-between px-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-[var(--c-muted)]">
-            Assistant
-          </span>
-          <button
-            className="text-[var(--c-muted)] hover:text-[var(--c-text)]"
-            onClick={async () => {
-              await newConversation();
-              onNavigate();
-            }}
-            title="New conversation"
-          >
-            <Plus size={16} />
-          </button>
-        </div>
-        {conversations.map((c) => {
-          const k = `conversation:${c.id}`;
-          return (
-            <button
-              key={c.id}
-              onClick={() => go({ type: "conversation", id: c.id })}
-              className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition ${
-                active === k
-                  ? "bg-[var(--c-accent-soft)] text-[var(--c-text)]"
-                  : "text-[var(--c-muted)] hover:bg-[var(--c-elevated)]"
-              }`}
-            >
-              <Sparkles
-                size={15}
-                className="shrink-0"
-                style={{ color: agent?.color || "#8b5cf6" }}
-              />
-              <span className="truncate">{c.title}</span>
-              {unread[k] > 0 && active !== k && (
-                <span className="ml-auto rounded-full bg-[var(--c-accent)] px-1.5 text-xs text-white">
-                  {unread[k]}
-                </span>
-              )}
-            </button>
-          );
-        })}
-        {conversations.length === 0 && (
-          <button
-            onClick={async () => {
-              await newConversation();
-              onNavigate();
-            }}
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-[var(--c-muted)] hover:bg-[var(--c-elevated)]"
-          >
-            <Sparkles size={15} /> Ask the Assistant…
-          </button>
-        )}
-
-        {/* Members */}
+        {/* Assistant — one ongoing private chat */}
         <div className="mb-1 mt-4 px-2 text-xs font-semibold uppercase tracking-wide text-[var(--c-muted)]">
-          Members — {members.filter((m) => m.online).length} online
+          Assistant
+        </div>
+        <button
+          onClick={() => {
+            openAgentChat();
+            onNavigate();
+          }}
+          className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition ${
+            active.startsWith("conversation:")
+              ? "bg-[var(--c-accent-soft)] text-[var(--c-text)]"
+              : "text-[var(--c-muted)] hover:bg-[var(--c-elevated)]"
+          }`}
+          title={`Chat privately with ${agent?.name || "the Assistant"}`}
+        >
+          <Sparkles
+            size={15}
+            className="shrink-0"
+            style={{ color: agent?.color || "#8b5cf6" }}
+          />
+          <span className="truncate">{agent?.name || "Assistant"}</span>
+          {convUnread > 0 && !active.startsWith("conversation:") && (
+            <span className="ml-auto rounded-full bg-[var(--c-accent)] px-1.5 text-xs text-white">
+              {convUnread}
+            </span>
+          )}
+        </button>
+
+        {/* Members — the people list; click anyone to open your DM with them */}
+        <div className="mb-1 mt-4 px-2 text-xs font-semibold uppercase tracking-wide text-[var(--c-muted)]">
+          Members — {members.filter((m) => m.online && !m.is_agent).length} online
         </div>
         {user && (
           <button
@@ -484,7 +437,11 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
               openDm(user.name); // a DM with yourself = private notes
               onNavigate();
             }}
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-[var(--c-muted)] transition hover:bg-[var(--c-elevated)]"
+            className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition ${
+              selfDm && active === `dm:${selfDm.id}`
+                ? "bg-[var(--c-accent-soft)] text-[var(--c-text)]"
+                : "text-[var(--c-muted)] hover:bg-[var(--c-elevated)]"
+            }`}
             title="Your private notes (a conversation only you can see)"
           >
             <Dot color="#34d399" />
@@ -492,38 +449,51 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
               {user.name}
             </span>
             <span className="text-xs opacity-60">(you)</span>
-          </button>
-        )}
-        {others.map((m) => (
-          <button
-            key={m.name}
-            onClick={() => {
-              // The Assistant isn't a real user — start a conversation instead of a DM.
-              if (m.is_agent) newConversation();
-              else openDm(m.name);
-              onNavigate();
-            }}
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-[var(--c-muted)] transition hover:bg-[var(--c-elevated)]"
-          >
-            {m.is_agent ? (
-              <Sparkles size={13} className="shrink-0" style={{ color: m.color }} />
-            ) : (
-              <Dot color={m.online ? "#34d399" : "#475569"} />
-            )}
-            <span
-              className="max-w-[7rem] shrink-0 truncate"
-              style={{ color: m.online ? "var(--c-text)" : undefined }}
-            >
-              {m.name}
-            </span>
-            {m.is_admin && <Shield size={12} className="shrink-0 text-amber-400" />}
-            {m.status && (
-              <span className="truncate text-xs opacity-70" title={m.status}>
-                {m.status}
+            {selfUnread > 0 && (!selfDm || active !== `dm:${selfDm.id}`) && (
+              <span className="ml-auto rounded-full bg-[var(--c-accent)] px-1.5 text-xs text-white">
+                {selfUnread}
               </span>
             )}
           </button>
-        ))}
+        )}
+        {others.map((m) => {
+          const dm = dmFor(m.name);
+          const k = dm ? `dm:${dm.id}` : "";
+          const isActive = !!k && active === k;
+          return (
+            <button
+              key={m.name}
+              onClick={() => {
+                openDm(m.name);
+                onNavigate();
+              }}
+              className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition ${
+                isActive
+                  ? "bg-[var(--c-accent-soft)] text-[var(--c-text)]"
+                  : "text-[var(--c-muted)] hover:bg-[var(--c-elevated)]"
+              }`}
+            >
+              <Dot color={m.online ? "#34d399" : "#475569"} />
+              <span
+                className="max-w-[7rem] shrink-0 truncate"
+                style={{ color: m.online ? "var(--c-text)" : undefined }}
+              >
+                {m.name}
+              </span>
+              {m.is_admin && <Shield size={12} className="shrink-0 text-amber-400" />}
+              {m.status && (
+                <span className="truncate text-xs opacity-70" title={m.status}>
+                  {m.status}
+                </span>
+              )}
+              {k && unread[k] > 0 && !isActive && (
+                <span className="ml-auto rounded-full bg-[var(--c-accent)] px-1.5 text-xs text-white">
+                  {unread[k]}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Footer nav */}

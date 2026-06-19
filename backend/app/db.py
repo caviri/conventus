@@ -136,7 +136,7 @@ CREATE TABLE IF NOT EXISTS agent (
     name          TEXT NOT NULL DEFAULT 'Assistant',
     base_url      TEXT NOT NULL DEFAULT 'https://api.openai.com/v1',
     api_key       TEXT NOT NULL DEFAULT '',
-    model         TEXT NOT NULL DEFAULT 'gpt-4o-mini',
+    model         TEXT NOT NULL DEFAULT 'openai/gpt-oss-120b',
     model_type    TEXT NOT NULL DEFAULT 'standard',  -- standard | reasoning
     system_prompt TEXT NOT NULL DEFAULT '',
     color         TEXT NOT NULL DEFAULT '#8b5cf6',

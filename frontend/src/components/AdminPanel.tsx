@@ -53,7 +53,7 @@ function AssistantTab() {
   const [form, setForm] = useState({
     name: "Assistant",
     base_url: "https://api.openai.com/v1",
-    model: "gpt-4o-mini",
+    model: "openai/gpt-oss-120b",
     model_type: "standard" as "standard" | "reasoning",
     system_prompt: "",
     color: "#8b5cf6",
