@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { useStore } from "../store";
 import type { User } from "../types";
@@ -49,7 +49,7 @@ export default function Login() {
   }
 
   return (
-    <div className="relative flex min-h-full w-full items-center justify-center overflow-hidden px-4 py-6">
+    <div className="relative isolate flex min-h-full w-full items-center justify-center overflow-hidden px-4 py-6">
       <LoginScene />
       <form
         onSubmit={submit}
@@ -110,11 +110,13 @@ export default function Login() {
   );
 }
 
-/** A soft Ghibli-style scene: sun, drifting clouds, layered hills and a tree. */
-function LoginScene() {
+/** A soft Ghibli-style scene: sun, drifting clouds, layered hills and a tree.
+ *  Memoized: it has no props, so it never needs to re-render when the login form
+ *  re-renders on each keystroke (which kept re-reconciling this large SVG). */
+const LoginScene = memo(function LoginScene() {
   return (
     <svg
-      className="pointer-events-none absolute inset-0 h-full w-full"
+      className="login-scene pointer-events-none absolute inset-0 h-full w-full"
       viewBox="0 0 1200 800"
       preserveAspectRatio="xMidYMax slice"
       aria-hidden="true"
@@ -148,4 +150,4 @@ function LoginScene() {
       </g>
     </svg>
   );
-}
+});

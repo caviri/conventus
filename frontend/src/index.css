@@ -124,6 +124,14 @@ html {
 .sun-glow {
   filter: drop-shadow(0 0 26px var(--c-sun));
 }
+.login-scene {
+  /* Composite the animated scene (drifting clouds + the sun-glow drop-shadow
+     filter) on its own GPU layer. Otherwise a caret/keystroke repaint in the
+     login card forces the expensive SVG filter to re-rasterize, which shows up
+     as an occasional flicker of the box while typing the password. */
+  will-change: transform;
+  transform: translateZ(0);
+}
 
 /* Message action toolbar: revealed on hover for mouse users, always visible on
  * touch devices (which have no hover). */
