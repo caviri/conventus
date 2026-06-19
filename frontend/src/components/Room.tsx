@@ -5,7 +5,7 @@ import { ditherDuotone } from "../dither";
 import BoardActions from "./BoardActions";
 import { Radio, Mic, PhoneOff, Loader2, Video, VideoOff, SlidersHorizontal } from "lucide-react";
 
-// A push-to-talk voice room. The browser captures + Opus-compresses the mic
+// A push-to-talk call room. The browser captures + Opus-compresses the mic
 // (low bitrate = walkie crunch); the server just relays clips to the room. See
 // backend/app/voice.py.
 //
@@ -90,6 +90,16 @@ export default function Room({
   const [showComp, setShowComp] = useState(false);
   const [frameKb, setFrameKb] = useState<number | null>(null);
   const [format, setFormat] = useState<"webp" | "jpeg">(WEBP_OK ? "webp" : "jpeg");
+  const [enlarged, setEnlarged] = useState<Set<string>>(new Set());
+
+  function toggleEnlarged(who: string) {
+    setEnlarged((prev) => {
+      const next = new Set(prev);
+      if (next.has(who)) next.delete(who);
+      else next.add(who);
+      return next;
+    });
+  }
   // Latest received video frame per sender, as object URLs (remote tiles).
   const [videoFrames, setVideoFrames] = useState<Record<string, string>>({});
 
@@ -356,6 +366,7 @@ export default function Room({
     setTalking(new Set());
     setTransmitting(false);
     setCameraOn(false);
+    setEnlarged(new Set());
     setVideoFrames((prev) => {
       Object.values(prev).forEach((u) => URL.revokeObjectURL(u));
       return {};
@@ -433,9 +444,10 @@ export default function Room({
             <Radio size={40} className="text-[var(--c-accent)]" />
             <h2 className="font-display text-xl font-semibold">{title}</h2>
             <p className="max-w-sm text-sm text-[var(--c-muted)]">
-              A walkie-talkie room — hold to talk, release to send. Audio is
+              A walkie-talkie call room — hold to talk, release to send. Audio is
               compressed in your browser and relayed to whoever's here. You can
-              also switch on your camera for a low-fi dithered video feed.
+              also switch on your camera for a low-fi dithered video feed, and
+              click any feed to enlarge it.
             </p>
             <button className="btn btn-primary" onClick={join} disabled={joining}>
               {joining ? <Loader2 size={16} className="animate-spin" /> : <Mic size={16} />}
@@ -466,7 +478,9 @@ export default function Room({
                     }`}
                   >
                     {hasVideo ? (
-                      <div
+                      <button
+                        onClick={() => toggleEnlarged(p)}
+                        title={enlarged.has(p) ? "Shrink" : "Enlarge"}
                         className={`overflow-hidden rounded-lg transition ${
                           isTalking ? "ring-2 ring-[var(--c-accent)]" : ""
                         }`}
@@ -476,12 +490,20 @@ export default function Room({
                             ref={localCanvasRef}
                             width={RES_PRESETS[resIdx].w}
                             height={RES_PRESETS[resIdx].h}
-                            className="h-24 w-32 -scale-x-100 object-cover"
+                            className={`-scale-x-100 object-cover transition-all ${
+                              enlarged.has(p) ? "h-64 w-80 sm:h-80 sm:w-[26rem]" : "h-24 w-32"
+                            }`}
                           />
                         ) : (
-                          <img src={remoteFrame} alt="" className="h-24 w-32 object-cover" />
+                          <img
+                            src={remoteFrame}
+                            alt=""
+                            className={`object-cover transition-all ${
+                              enlarged.has(p) ? "h-64 w-80 sm:h-80 sm:w-[26rem]" : "h-24 w-32"
+                            }`}
+                          />
                         )}
-                      </div>
+                      </button>
                     ) : (
                       <div
                         className={`grid h-12 w-12 place-items-center rounded-full text-lg font-semibold text-white transition ${
@@ -492,13 +514,21 @@ export default function Room({
                         {p.charAt(0).toUpperCase()}
                       </div>
                     )}
-                    <span className="text-xs">
+                    <span className="flex items-center gap-1 text-xs">
                       {p}
                       {isMe && " (you)"}
                     </span>
-                    <span className="h-3 text-[10px] text-[var(--c-accent)]">
-                      {isTalking ? "🔊 talking" : ""}
-                    </span>
+                    {hasVideo ? (
+                      // With the camera on, talk state is a small mic under the person.
+                      <Mic
+                        size={14}
+                        className={isTalking ? "text-[var(--c-accent)]" : "text-[var(--c-muted)] opacity-50"}
+                      />
+                    ) : (
+                      <span className="h-3 text-[10px] text-[var(--c-accent)]">
+                        {isTalking ? "🔊 talking" : ""}
+                      </span>
+                    )}
                   </div>
                 );
               })}
