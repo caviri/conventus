@@ -71,7 +71,11 @@ async def stream_chat(
         async with client.stream(
             "POST", _endpoint(base_url), headers=headers, json=payload
         ) as resp:
-            resp.raise_for_status()
+            if resp.status_code >= 400:
+                # Surface the API's actual reason (e.g. "key not allowed to access
+                # model X") instead of a bare "403 for url …".
+                body = (await resp.aread()).decode("utf-8", "replace").strip()
+                raise RuntimeError(f"HTTP {resp.status_code}: {body[:400]}")
             async for line in resp.aiter_lines():
                 if not line.startswith("data:"):
                     continue
@@ -110,7 +114,8 @@ async def complete(
         payload["response_format"] = {"type": "json_object"}
     async with httpx.AsyncClient(timeout=120.0) as client:
         resp = await client.post(_endpoint(cfg["base_url"]), headers=headers, json=payload)
-        resp.raise_for_status()
+        if resp.status_code >= 400:
+            raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:400]}")
         data = resp.json()
     return data["choices"][0]["message"]["content"] or ""
 
