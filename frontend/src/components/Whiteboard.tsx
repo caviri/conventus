@@ -87,7 +87,9 @@ export default function Whiteboard({
   // View transform maps world coords (the fixed W×H board) → CSS pixels in the
   // canvas, which now fills its whole container instead of a fixed-ratio box.
   const view = useRef({ scale: 1, x: 0, y: 0 });
-  const fitted = useRef(false);
+  // While false, the board auto-fits the panel on every resize; the first
+  // pan/zoom flips it true so we stop fighting the user's chosen view.
+  const userAdjusted = useRef(false);
   const selectedRef = useRef<string | null>(null);
   // Displayed canvas size in CSS pixels; tracked so overlays re-render on resize.
   const [size, setSize] = useState({ w: W, h: H });
@@ -196,11 +198,12 @@ export default function Whiteboard({
     const v = view.current;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    // Subtle board bounds so users can see the extent of the W×H world.
-    ctx.setTransform(dpr * v.scale, 0, 0, dpr * v.scale, dpr * v.x, dpr * v.y);
+    // Full-bleed white: the whole panel is the drawing surface (no dark margins).
     ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, W, H);
-    ctx.strokeStyle = "rgba(100,116,139,0.35)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(dpr * v.scale, 0, 0, dpr * v.scale, dpr * v.x, dpr * v.y);
+    // A faint outline of the "page" bounds for orientation (matches the minimap).
+    ctx.strokeStyle = "rgba(100,116,139,0.25)";
     ctx.lineWidth = 1 / v.scale;
     ctx.strokeRect(0, 0, W, H);
     images.forEach((im) => drawImage(im, ctx));
@@ -297,6 +300,7 @@ export default function Whiteboard({
 
   // ---- zoom / pan --------------------------------------------------------
   function zoomAt(cx: number, cy: number, factor: number) {
+    userAdjusted.current = true;
     const v = view.current;
     const ns = Math.max(MIN_SCALE, Math.min(MAX_SCALE, v.scale * factor));
     const wx = (cx - v.x) / v.scale;
@@ -321,12 +325,14 @@ export default function Whiteboard({
     };
   }
   function fitView() {
+    userAdjusted.current = false; // re-enable auto-fit (follow resizes again)
     const c = canvasRef.current;
     fitInto(c?.clientWidth || size.w, c?.clientHeight || size.h);
     redraw();
     rerender();
   }
   function centerOnWorld(wx: number, wy: number) {
+    userAdjusted.current = true;
     const c = canvasRef.current;
     const cw = c?.clientWidth || size.w;
     const ch = c?.clientHeight || size.h;
@@ -370,10 +376,9 @@ export default function Whiteboard({
       el.width = Math.round(w * dpr);
       el.height = Math.round(h * dpr);
       setSize((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
-      if (!fitted.current) {
-        fitted.current = true;
-        fitInto(w, h);
-      }
+      // Re-fit on every resize until the user has chosen their own pan/zoom.
+      // This corrects the too-small first measurement (layout not settled yet).
+      if (!userAdjusted.current) fitInto(w, h);
       redraw();
     };
     sync();
@@ -515,6 +520,7 @@ export default function Whiteboard({
     const [wx, wy] = toWorld(e);
     publishCursor(wx, wy);
     if (panning.current) {
+      userAdjusted.current = true;
       const [cx, cy] = toCanvasPx(e);
       view.current.x += cx - panning.current.lx;
       view.current.y += cy - panning.current.ly;
