@@ -29,6 +29,31 @@ const DEFAULT_RES = 1; // 192×144
 const DEFAULT_FPS = 6;
 const DEFAULT_QUALITY = 0.6;
 
+// Can this browser *encode* WebP from a canvas? (Chrome/Edge/Firefox yes; Safari
+// silently falls back to PNG, so we detect and offer JPEG instead.)
+const WEBP_OK = (() => {
+  try {
+    const c = document.createElement("canvas");
+    c.width = c.height = 1;
+    return c.toDataURL("image/webp").startsWith("data:image/webp");
+  } catch {
+    return false;
+  }
+})();
+
+// Sniff an image's MIME from its magic bytes so a received frame renders no
+// matter which codec the sender chose.
+function sniffImageMime(bytes: Uint8Array): string {
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) return "image/jpeg";
+  if (bytes[0] === 0x89 && bytes[1] === 0x50) return "image/png";
+  if (
+    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+    bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+  )
+    return "image/webp";
+  return "image/jpeg";
+}
+
 function pickMime(): string {
   const cands = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
   for (const c of cands) {
@@ -63,6 +88,8 @@ export default function Room({
   const [fps, setFps] = useState(DEFAULT_FPS);
   const [quality, setQuality] = useState(DEFAULT_QUALITY);
   const [showComp, setShowComp] = useState(false);
+  const [frameKb, setFrameKb] = useState<number | null>(null);
+  const [format, setFormat] = useState<"webp" | "jpeg">(WEBP_OK ? "webp" : "jpeg");
   // Latest received video frame per sender, as object URLs (remote tiles).
   const [videoFrames, setVideoFrames] = useState<Record<string, string>>({});
 
@@ -79,6 +106,8 @@ export default function Room({
   const camTimerRef = useRef<number | null>(null);
   const ditherRef = useRef(true);
   const qualityRef = useRef(DEFAULT_QUALITY);
+  const formatRef = useRef<"webp" | "jpeg">(WEBP_OK ? "webp" : "jpeg");
+  const statTimeRef = useRef(0);
 
   function markTalking(who: string, on: boolean) {
     setTalking((prev) => {
@@ -99,8 +128,9 @@ export default function Room({
     ws.send(out.buffer);
   }
 
-  function showVideoFrame(sender: string, jpeg: ArrayBuffer) {
-    const url = URL.createObjectURL(new Blob([jpeg], { type: "image/jpeg" }));
+  function showVideoFrame(sender: string, frame: ArrayBuffer) {
+    const mime = sniffImageMime(new Uint8Array(frame, 0, 12));
+    const url = URL.createObjectURL(new Blob([frame], { type: mime }));
     setVideoFrames((prev) => {
       if (prev[sender]) URL.revokeObjectURL(prev[sender]);
       return { ...prev, [sender]: url };
@@ -268,11 +298,19 @@ export default function Room({
     if (!ctx) return;
     ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
     if (ditherRef.current) ditherDuotone(ctx, canvas.width, canvas.height);
+    const mime = formatRef.current === "webp" ? "image/webp" : "image/jpeg";
     canvas.toBlob(
       async (blob) => {
-        if (blob) sendFrame(KIND_VIDEO, await blob.arrayBuffer());
+        if (!blob) return;
+        sendFrame(KIND_VIDEO, await blob.arrayBuffer());
+        // Live bandwidth readout, throttled to ~2 Hz.
+        const now = performance.now();
+        if (now - statTimeRef.current > 500) {
+          statTimeRef.current = now;
+          setFrameKb(blob.size / 1024);
+        }
       },
-      "image/jpeg",
+      mime,
       qualityRef.current
     );
   }
@@ -286,6 +324,7 @@ export default function Room({
     camStreamRef.current = null;
     camVideoRef.current = null;
     setCameraOn(false);
+    setFrameKb(null);
     const ws = wsRef.current;
     if (ws?.readyState === WebSocket.OPEN)
       ws.send(JSON.stringify({ type: "cam", on: false }));
@@ -331,6 +370,9 @@ export default function Room({
   useEffect(() => {
     qualityRef.current = quality;
   }, [quality]);
+  useEffect(() => {
+    formatRef.current = format;
+  }, [format]);
 
   // (Re)create the capture timer whenever the camera turns on or the frame rate
   // changes. Resolution/quality/dither are read live, so they need no restart.
@@ -561,6 +603,29 @@ export default function Room({
                       onChange={(e) => setDither(e.target.checked)}
                     />
                   </label>
+                  <label className="flex items-center justify-between gap-3">
+                    <span>Codec</span>
+                    <select
+                      className="input !w-auto !py-1 text-xs"
+                      value={format}
+                      onChange={(e) => setFormat(e.target.value as "webp" | "jpeg")}
+                    >
+                      {WEBP_OK && <option value="webp">WebP (smaller)</option>}
+                      <option value="jpeg">JPEG</option>
+                    </select>
+                  </label>
+                  <div className="mt-1 border-t border-[var(--c-border)] pt-2 text-xs text-[var(--c-muted)]">
+                    {frameKb != null ? (
+                      <>
+                        ≈ <span className="text-[var(--c-text)]">{frameKb.toFixed(1)} KB</span>/frame ·{" "}
+                        <span className="text-[var(--c-text)]">{Math.round(frameKb * 8 * fps)} kbps</span> up
+                      </>
+                    ) : cameraOn ? (
+                      "measuring…"
+                    ) : (
+                      "start the camera to see your upstream rate"
+                    )}
+                  </div>
                 </div>
               )}
             </div>
