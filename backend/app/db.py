@@ -240,6 +240,10 @@ def init() -> None:
                 "INSERT INTO boards(kind, name, created_at) VALUES ('whiteboard', 'Whiteboard', ?)",
                 (now,),
             )
+            conn.execute(
+                "INSERT INTO boards(kind, name, created_at) VALUES ('kanban', 'Kanban', ?)",
+                (now,),
+            )
         # Ensure exactly one Assistant bot (the Gardener) exists. The first time,
         # migrate the old single-row `agent` config into a bot; otherwise seed a
         # fresh default (disabled until an admin sets the endpoint + key).

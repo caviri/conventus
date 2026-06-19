@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useStore, viewKey } from "../store";
 import { api } from "../api";
 import { getTheme, toggleTheme } from "../theme";
+import { promptName } from "./PromptModal";
 import type { View, BoardKind, Channel, Board, Folder } from "../types";
 import {
   Hash,
@@ -73,9 +74,7 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
     moveToFolder,
   } = useStore();
 
-  const [creating, setCreating] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [newChannel, setNewChannel] = useState("");
   const [theme, setThemeState] = useState(getTheme());
   const [dragOver, setDragOver] = useState<number | "root" | null>(null);
   const [collapsed, setCollapsed] = useState<Set<number>>(() => {
@@ -102,7 +101,11 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
 
   async function createBoard(kind: BoardKind) {
     setMenuOpen(false);
-    const name = window.prompt(`Name for the new ${BOARD_KIND[kind].label}`)?.trim();
+    const name = await promptName({
+      title: `New ${BOARD_KIND[kind].label}`,
+      placeholder: BOARD_KIND[kind].label,
+      confirmLabel: "Create",
+    });
     if (!name) return;
     const b = await api.post<{ id: number }>("/api/boards", { kind, name });
     await refreshBoards();
@@ -111,14 +114,14 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
 
   async function createFolder() {
     setMenuOpen(false);
-    const name = window.prompt("Name for the new folder")?.trim();
+    const name = await promptName({ title: "New folder", placeholder: "folder name", confirmLabel: "Create" });
     if (!name) return;
     await api.post("/api/folders", { name });
     await refreshFolders();
   }
 
   async function renameFolder(f: Folder) {
-    const name = window.prompt("Rename folder", f.name)?.trim();
+    const name = await promptName({ title: "Rename folder", initial: f.name, confirmLabel: "Rename" });
     if (!name || name === f.name) return;
     await api.patch(`/api/folders/${f.id}`, { name });
     await refreshFolders();
@@ -131,12 +134,11 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
     await Promise.all([refreshFolders(), refreshChannels(), refreshBoards()]);
   }
 
-  async function createChannel(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newChannel.trim()) return;
-    await api.post("/api/channels", { name: newChannel.trim() });
-    setNewChannel("");
-    setCreating(false);
+  async function createChannel() {
+    setMenuOpen(false);
+    const name = await promptName({ title: "New channel", placeholder: "channel-name", confirmLabel: "Create" });
+    if (!name) return;
+    await api.post("/api/channels", { name });
     await refreshChannels();
   }
 
@@ -273,10 +275,7 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
               <div className="card absolute right-1 top-7 z-20 w-44 overflow-hidden p-1 text-sm shadow-2xl fade-in">
                 <button
                   className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--c-elevated)]"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    setCreating(true);
-                  }}
+                  onClick={createChannel}
                 >
                   <Hash size={15} /> New channel
                 </button>
@@ -315,19 +314,6 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
             </>
           )}
         </div>
-        {creating && (
-          <form onSubmit={createChannel} className="px-2 py-1">
-            <input
-              autoFocus
-              className="input"
-              placeholder="channel-name"
-              value={newChannel}
-              onChange={(e) => setNewChannel(e.target.value)}
-              onBlur={() => !newChannel && setCreating(false)}
-            />
-          </form>
-        )}
-
         {/* Folders — collapsible groups holding channels and boards */}
         {folders.map((f) => {
           const isCollapsed = collapsed.has(f.id);

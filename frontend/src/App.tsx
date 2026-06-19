@@ -17,6 +17,7 @@ import Settings from "./components/Settings";
 import AdminPanel from "./components/AdminPanel";
 import Search from "./components/Search";
 import Lightbox from "./components/Lightbox";
+import { PromptHost } from "./components/PromptModal";
 import DropZone from "./components/DropZone";
 import MobileTabBar from "./components/MobileTabBar";
 import ConnectionBanner from "./components/ConnectionBanner";
@@ -121,6 +122,7 @@ export default function App() {
     <div className="flex h-full overflow-hidden">
       {searchOpen && <Search />}
       <Lightbox />
+      <PromptHost />
       <DropZone />
       <ConnectionBanner />
       {/* Mobile backdrop */}

@@ -1,5 +1,6 @@
 import { useStore } from "../store";
 import { api } from "../api";
+import { promptName } from "./PromptModal";
 import { Pencil, Trash2 } from "lucide-react";
 
 // Rename / delete controls shown in a board's header. Anyone can rename;
@@ -11,7 +12,7 @@ export default function BoardActions({ id, name }: { id: number; name: string })
   const refreshBoards = useStore((s) => s.refreshBoards);
 
   async function rename() {
-    const next = window.prompt("Rename board", name)?.trim();
+    const next = await promptName({ title: "Rename board", initial: name, confirmLabel: "Rename" });
     if (!next || next === name) return;
     await api.patch(`/api/boards/${id}`, { name: next });
     await refreshBoards();

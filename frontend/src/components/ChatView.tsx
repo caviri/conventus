@@ -4,6 +4,7 @@ import { api } from "../api";
 import Message from "./Message";
 import Composer from "./Composer";
 import Avatar from "./Avatar";
+import { promptName } from "./PromptModal";
 import type { Message as MessageType } from "../types";
 import EmptyState from "./EmptyState";
 import { formatDate } from "../format";
@@ -95,7 +96,7 @@ export default function ChatView() {
 
   async function renameConv() {
     if (!conv) return;
-    const next = window.prompt("Rename conversation", conv.title)?.trim();
+    const next = await promptName({ title: "Rename conversation", initial: conv.title, confirmLabel: "Rename" });
     if (next && next !== conv.title) await renameConversation(conv.id, next);
   }
 
@@ -176,7 +177,7 @@ export default function ChatView() {
 
   async function renameChannel() {
     if (!channel) return;
-    const next = window.prompt("Rename channel", channel.name)?.trim();
+    const next = await promptName({ title: "Rename channel", initial: channel.name, confirmLabel: "Rename" });
     if (!next || next === channel.name) return;
     await api.patch(`/api/channels/${channel.id}`, { name: next });
     await refreshChannels();

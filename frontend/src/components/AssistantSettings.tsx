@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useStore } from "../store";
+import { promptName } from "./PromptModal";
 import { Sparkles, Trash2, Plus, Pencil, Check, X } from "lucide-react";
 
 // The signed-in user's conversation list. The Assistant's *configuration* lives
@@ -63,7 +64,7 @@ export default function AssistantSettings() {
                 className="text-[var(--c-muted)] hover:text-[var(--c-text)]"
                 title="Rename"
                 onClick={async () => {
-                  const next = window.prompt("Rename conversation", c.title)?.trim();
+                  const next = await promptName({ title: "Rename conversation", initial: c.title, confirmLabel: "Rename" });
                   if (next && next !== c.title) await renameConversation(c.id, next);
                 }}
               >
