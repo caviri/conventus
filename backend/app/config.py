@@ -66,6 +66,39 @@ AGENT_MODEL: str = _env("AGENT_MODEL", "")
 AGENT_MODEL_TYPE: str = _env("AGENT_MODEL_TYPE", "")  # standard | reasoning
 AGENT_NAME: str = _env("AGENT_NAME", "")
 
+# WebRTC ICE servers for call rooms. Call media is peer-to-peer; the server only
+# relays signaling (backend/app/voice.py). STUN lets peers discover their public
+# address and works across most home/office NATs. Users behind symmetric NAT or
+# strict firewalls also need a TURN relay — set TURN_URLS (+ credentials) to one.
+#   STUN_URLS  — comma-separated stun: URLs (default: Google's public STUN)
+#   TURN_URLS  — comma-separated turn:/turns: URLs (empty = no TURN)
+#   TURN_USERNAME / TURN_PASSWORD — credentials for the TURN server
+STUN_URLS: str = _env("STUN_URLS", "stun:stun.l.google.com:19302")
+TURN_URLS: str = _env("TURN_URLS", "")
+TURN_USERNAME: str = _env("TURN_USERNAME", "")
+TURN_PASSWORD: str = _env("TURN_PASSWORD", "")
+
+
+def _split(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def ice_servers() -> list[dict]:
+    """RTCIceServer entries handed to the browser when joining a call room."""
+    servers: list[dict] = []
+    stun = _split(STUN_URLS)
+    if stun:
+        servers.append({"urls": stun})
+    turn = _split(TURN_URLS)
+    if turn:
+        entry: dict = {"urls": turn}
+        if TURN_USERNAME:
+            entry["username"] = TURN_USERNAME
+        if TURN_PASSWORD:
+            entry["credential"] = TURN_PASSWORD
+        servers.append(entry)
+    return servers
+
 
 def ensure_dirs() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)

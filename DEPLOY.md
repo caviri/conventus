@@ -51,11 +51,40 @@ Space whenever you push to `main`.
    (step A.3) — these live on HF, not in GitHub.
 4. Push to `main` → the Action deploys → the Space rebuilds.
 
+## Call rooms (TURN)
+
+Call rooms are a **WebRTC mesh**: audio and video stream peer-to-peer and the
+container only relays signaling. Two things matter for a real deployment:
+
+- **HTTPS is required** for the browser to grant mic/camera access — same as the
+  PWA and push. Spaces provide it automatically; self-hosting elsewhere, put the
+  app behind TLS (a reverse proxy / `https://`).
+- **NAT traversal.** The default `STUN_URLS` (Google's public STUN) connects
+  peers on most home/office networks. Users behind **strict or symmetric NATs**
+  (some corporate/mobile networks) can't connect without a **TURN relay**, which
+  this container doesn't run. Point it at one with these env vars / Space secrets:
+
+  | Variable        | Example                              |
+  | --------------- | ------------------------------------ |
+  | `STUN_URLS`     | `stun:stun.l.google.com:19302`       |
+  | `TURN_URLS`     | `turn:turn.example.com:3478`         |
+  | `TURN_USERNAME` | `conventus`                          |
+  | `TURN_PASSWORD` | a strong shared secret               |
+
+  `STUN_URLS` / `TURN_URLS` accept a comma-separated list. A common self-hosted
+  TURN server is **[coturn](https://github.com/coturn/coturn)** — e.g. run it
+  alongside the app and set, in its config, `lt-cred-mech` with a matching
+  `user=conventus:<password>` and `realm`. The browser fetches this ICE config
+  at join time from `GET /api/auth/config`.
+
+A mesh is sized for **small groups** (~4–6 people). Larger calls would need a
+media server (SFU), which this single-container app deliberately doesn't run.
+
 ## Notes
 
 - **HTTPS is automatic** on Spaces, which is required for the installable PWA,
-  service worker, and **Web Push** delivery. (Push can only be verified on a
-  real HTTPS deployment with a real device — localhost can't exercise the final
-  delivery hop.)
+  service worker, **Web Push** delivery, and **call-room** mic/camera access.
+  (Push can only be verified on a real HTTPS deployment with a real device —
+  localhost can't exercise the final delivery hop.)
 - To verify after deploy: open the URL on a phone, **Install** from Settings,
   enable notifications, and have someone `@mention` you while the app is closed.

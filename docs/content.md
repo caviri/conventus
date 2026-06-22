@@ -61,8 +61,10 @@ audio/video open in a modal without leaving the room.
 
 ### 📝 Real-time collaboration (Yjs CRDT)
 Boards live right under the channels list; the **+** next to *Channels* opens a
-menu to spin up any of three kinds (or a **folder** to organize them — drag
-channels and boards into collapsible folders, shared across the room):
+menu to spin up a **folder** (to organize them — drag channels and boards into
+collapsible folders, shared across the room) or any of **four** board kinds.
+Three are collaborative CRDT surfaces; the fourth is a live **call room** (in
+its own section below):
 - **Live documents** — shared markdown scratchpads with live preview,
   **multiple named** boards, **live remote cursors**, and one-click
   **download as Markdown or PDF**.
@@ -78,6 +80,29 @@ channels and boards into collapsible folders, shared across the room):
 ![Live remote caret in the canvas](img/canvas-cursor-B.png)
 ![Collaborative whiteboard, synced to a second browser](img/whiteboard-synced-B.png)
 ![Multiple named canvases and whiteboards](img/boards.png)
+
+### 🎙️ Call rooms
+A board kind that's a **live call** instead of a document — open the **+** menu →
+**Call room**. Everyone who joins shares **continuous audio and video**: mics
+stay open (no push-to-talk), and because it's built on **WebRTC**, each person's
+sound is automatically kept **in sync with their video** (lip-synced).
+
+- **Peer-to-peer.** Media streams directly between participants in a full mesh —
+  the server only relays the initial signaling, never the audio or video.
+- **Mic & camera controls** — mute/unmute (or hold **Space** to talk while
+  muted), flip your camera on or off anytime, choose a video-quality preset, and
+  toggle an optional **lo-fi filter** to match the room's aesthetic.
+- **Resizable tiles** with a live **speaking** ring on whoever's talking — bump
+  any participant up to 5×.
+- **Best for small groups.** A mesh is perfect for a handful of people; a large
+  call would want a media server (SFU), which this single-container app
+  deliberately doesn't run.
+- **Networking.** Works out of the box on most networks via **STUN**. Behind
+  strict or symmetric NATs, point it at a **TURN** server with the `TURN_*`
+  variables (see [Configuration](#configuration)).
+
+![Join a call room](img/room-join.png)
+![A live call — continuous, lip-synced audio + video, streamed peer-to-peer](img/room-call.png)
 
 ### 🤖 Bots & automation
 - **Bots** — wire up any **OpenAI-compatible** endpoint and let an agent live in
@@ -268,7 +293,7 @@ flowchart TB
 | ------------ | ---------------------------------------------------------------------- |
 | Frontend     | React 18, Vite, TypeScript, Tailwind v4, Zustand, Yjs, highlight.js    |
 | Backend      | FastAPI, uvicorn, SQLite (WAL), itsdangerous, httpx, BeautifulSoup     |
-| Realtime     | WebSockets (presence/messages) + a binary Yjs relay (collab)           |
+| Realtime     | WebSockets (presence/messages) + a binary Yjs relay (collab) + WebRTC call rooms (signaling relay) |
 | Notifications| Web Push (pywebpush + VAPID), a service worker                         |
 | Packaging    | Multi-stage Docker (Vite build → FastAPI serves the static SPA)        |
 
@@ -302,6 +327,10 @@ docker compose up --build
 | `ROOM_NAME`     | `Conventus` | Branding in the UI                       |
 | `MAX_UPLOAD_MB` | `100`       | Per-file upload limit                    |
 | `DATA_DIR`      | `/data`     | DB + uploads location                    |
+| `STUN_URLS`     | Google STUN | Comma-separated STUN URLs for call rooms |
+| `TURN_URLS`     | _(none)_    | Comma-separated TURN URLs (for strict/symmetric NATs) |
+| `TURN_USERNAME` | _(none)_    | TURN credential username                 |
+| `TURN_PASSWORD` | _(none)_    | TURN credential password                 |
 
 ---
 
@@ -340,7 +369,7 @@ Use the admin password in the same `"password"` field to get an **admin** token
 | `POST /api/auth/login`  | `{password, name}` → `{token, user}`. Password may be room, admin, or reserved-name password. |
 | `GET  /api/auth/me`     | Current user                                   |
 | `POST /api/auth/protect` | `{password}` — protect your own name with a personal password (login then requires it). Empty password removes the protection. |
-| `GET  /api/auth/config` | Public: room name + version (no auth)          |
+| `GET  /api/auth/config` | Public: room name, version + call-room ICE servers (no auth) |
 
 **Channels & messages**
 
@@ -405,7 +434,8 @@ Use the admin password in the same `"password"` field to get an **admin** token
 | `POST /api/admin/import` 🔒    | multipart `file=` (a previous export)         |
 
 > 🔒 = requires an admin token. The same token authorizes the realtime
-> `/ws?token=…` (presence + messages) and `/collab/{doc}?token=…` (Yjs) sockets.
+> `/ws?token=…` (presence + messages), `/collab/{doc}?token=…` (Yjs), and
+> `/voice/{room}?token=…` (WebRTC call-room signaling) sockets.
 
 ---
 

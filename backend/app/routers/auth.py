@@ -143,4 +143,8 @@ async def protect_name(req: ProtectRequest, user=Depends(current_user)):
 @router.get("/config")
 async def public_config():
     """Unauthenticated: what the login screen needs to render."""
-    return {"room_name": config.ROOM_NAME, "version": "0.1.0"}
+    return {
+        "room_name": config.ROOM_NAME,
+        "version": "0.1.0",
+        "ice_servers": config.ice_servers(),
+    }

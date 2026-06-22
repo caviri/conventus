@@ -98,15 +98,20 @@ docs), and `conventus-design` (restyle / new themes).
 
 ## Known limitations / TODO
 
-Call rooms (`backend/app/voice.py`, `frontend/src/components/Room.tsx`):
+Call rooms are a **WebRTC mesh** (`backend/app/voice.py` relays signaling only;
+`frontend/src/components/Room.tsx` runs the peer connections). Continuous audio +
+video stream peer-to-peer; the browser keeps each peer's audio lip-synced to
+their video. This also sidesteps the old `MediaRecorder` codec-interop and
+iOS-autoplay problems (WebRTC negotiates a common codec and plays through a
+gesture-unlocked `<video>`).
 
-- **Audio codec interop.** Clips are whatever each browser's `MediaRecorder`
-  produces — Chrome/Firefox emit `webm/opus`, Safari emits `mp4/AAC`. There is no
-  single format every browser both records *and* decodes, so **Chrome → iOS
-  Safari audio won't play** (iOS can't decode Opus/webm). Fixing it needs either
-  server-side transcoding or a Web-Audio PCM path (capture raw PCM, send that,
-  play via an `AudioContext`) — a meaningful chunk of work, not yet done.
-- **iOS autoplay of incoming clips.** Received clips play via `new Audio().play()`
-  outside a user gesture. iOS usually allows it once you've joined (the join tap
-  unlocks audio) but Safari can be strict. More reliable would be to resume a
-  single `AudioContext` on the join tap and route all playback through it.
+- **NAT traversal needs STUN, sometimes TURN.** Peers exchange addresses via STUN
+  (default `stun:stun.l.google.com:19302`). That works across most home/office
+  NATs, but users behind **symmetric NAT or strict firewalls** can't connect
+  without a **TURN relay**. There's no TURN by default — set `TURN_URLS`
+  (+ `TURN_USERNAME`/`TURN_PASSWORD`, and override `STUN_URLS` if desired) to
+  point at one. ICE config is delivered to the browser via `GET /api/auth/config`.
+- **Mesh scaling.** Every participant uploads their stream to every other
+  participant, so upstream bandwidth grows with room size — fine for ~4–6 people,
+  not a 50-person town hall. A bigger room would need an SFU (a media server that
+  forwards streams), which this single-container app deliberately doesn't run.

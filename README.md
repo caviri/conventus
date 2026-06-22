@@ -56,10 +56,11 @@ delete it.
 - 📎 **Rich sharing** — images, audio, video (incl. inline **WebM/MP4/GIF**), files, and **auto link previews** (OpenGraph, with inline players for media links). **Drag-and-drop** anywhere to share.
 - 🖼️ **Image lightbox** and a **Files / Drive** view of everything uploaded, with **in-app previews** — images, rendered **markdown**, plain text/code, **PDFs**, and audio/video open in a modal without leaving the room.
 
-**Collaboration** *(Yjs CRDT — boards live under the channels list, created from the **+** menu)*
-- 📝 **Live documents** — shared markdown scratchpads with live preview, **multiple named** boards, **live remote cursors**, and one-click **download as Markdown or PDF**.
-- 🎨 **Collaborative whiteboards** — freehand drawing with colors and brush sizes, **images you can move, resize and rotate**, **zoom & pan**, a Minecraft-style **tool hotbar**, **comment pins that @tag people**, and live remote cursors.
-- 📋 **Kanban boards** — columns and cards you can drag between lists, viewable as a **board, table, or list**. Cards carry **images, keywords, an assignee, a due date, and a link**.
+**Boards** *(live under the channels list, created from the **+** menu)*
+- 📝 **Live documents** *(Yjs CRDT)* — shared markdown scratchpads with live preview, **multiple named** boards, **live remote cursors**, and one-click **download as Markdown or PDF**.
+- 🎨 **Collaborative whiteboards** *(Yjs CRDT)* — freehand drawing with colors and brush sizes, **images you can move, resize and rotate**, **zoom & pan**, a Minecraft-style **tool hotbar**, **comment pins that @tag people**, and live remote cursors.
+- 📋 **Kanban boards** *(Yjs CRDT)* — columns and cards you can drag between lists, viewable as a **board, table, or list**. Cards carry **images, keywords, an assignee, a due date, and a link**.
+- 🎙️ **Call rooms** *(WebRTC)* — a live call right in the sidebar: **continuous, lip-synced audio + video** for everyone who joins, streamed **peer-to-peer**, with mute (or hold-**Space** to talk), a camera toggle, resizable tiles, and an optional lo-fi filter.
 
 **Bots & automation**
 - 🤖 **Bots** — wire up any **OpenAI-compatible** endpoint and let an agent live in a channel (reply on @mention or every message), with **streaming** replies and avatars.
@@ -154,13 +155,14 @@ Interactive docs are served at `/docs` (FastAPI / Swagger).
 ┌─────────────────────────── single container ───────────────────────────┐
 │  FastAPI (uvicorn) ── REST + WebSocket ── SQLite (WAL) + files on disk   │
 │         │              │                                                 │
-│         │              └── Yjs collab relay (docs · whiteboards · kanban)  │
+│         │              ├── Yjs collab relay (docs · whiteboards · kanban)  │
+│         │              └── WebRTC signaling relay (call rooms)             │
 │         └── serves the built React/Vite SPA (Tailwind) as static         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Backend** — `backend/app`: routers (auth, channels, dms, messages, search, boards, files, bots, members, admin), a WebSocket presence/fan-out hub, a persistent Yjs collab relay (with log compaction), and link-preview + streaming-bot engines. SQLite in WAL mode; nothing external to run.
-- **Frontend** — `frontend/src`: React + Zustand + Tailwind v4, a reconnecting WebSocket, and Yjs for the collaborative boards (live documents, whiteboards, kanban). No accounts — just a signed session token from the room password.
+- **Backend** — `backend/app`: routers (auth, channels, dms, messages, search, boards, files, bots, members, admin), a WebSocket presence/fan-out hub, a persistent Yjs collab relay (with log compaction), a WebRTC call-room signaling relay (media stays peer-to-peer), and link-preview + streaming-bot engines. SQLite in WAL mode; nothing external to run.
+- **Frontend** — `frontend/src`: React + Zustand + Tailwind v4, a reconnecting WebSocket, Yjs for the collaborative boards (live documents, whiteboards, kanban), and a WebRTC mesh for call rooms. No accounts — just a signed session token from the room password.
 
 ## Theming
 
