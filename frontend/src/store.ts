@@ -3,6 +3,7 @@ import { api, getToken, setToken } from "./api";
 import { notifyMention } from "./notifications";
 import type {
   AgentConfig,
+  BingoGame,
   Board,
   Bot,
   Channel,
@@ -24,6 +25,7 @@ export function viewKey(view: View): string {
   if (view.type === "whiteboard") return `whiteboard:${view.id}`;
   if (view.type === "kanban") return `kanban:${view.id}`;
   if (view.type === "room") return `room:${view.id}`;
+  if (view.type === "bingo") return `bingo:${view.id}`;
   return view.type;
 }
 
@@ -46,6 +48,7 @@ interface State {
   boards: Board[];
   folders: Folder[];
   files: FileItem[];
+  bingoGames: Record<number, BingoGame>;
   view: View;
   messages: Record<string, Message[]>;
   unread: Record<string, number>;
@@ -74,6 +77,7 @@ interface State {
   refreshMembers: () => Promise<void>;
   refreshBots: () => Promise<void>;
   refreshBoards: () => Promise<void>;
+  refreshBingo: (boardId: number) => Promise<BingoGame>;
   refreshFolders: () => Promise<void>;
   moveToFolder: (kind: "channel" | "board", id: number, folderId: number | null) => Promise<void>;
   refreshFiles: () => Promise<void>;
@@ -104,6 +108,7 @@ export const useStore = create<State>((set, get) => ({
   boards: [],
   folders: [],
   files: [],
+  bingoGames: {},
   view: { type: "channel", id: 0 },
   messages: {},
   unread: {},
@@ -259,6 +264,11 @@ export const useStore = create<State>((set, get) => ({
   },
   async refreshBoards() {
     set({ boards: await api.get<Board[]>("/api/boards") });
+  },
+  async refreshBingo(boardId) {
+    const game = await api.get<BingoGame>(`/api/bingo/${boardId}`);
+    set((s) => ({ bingoGames: { ...s.bingoGames, [boardId]: game } }));
+    return game;
   },
   async refreshFolders() {
     set({ folders: await api.get<Folder[]>("/api/folders") });
@@ -426,6 +436,18 @@ export const useStore = create<State>((set, get) => ({
       case "board.delete":
         get().refreshBoards();
         break;
+      case "bingo.update": {
+        // Broadcasts omit the per-user is_host flag; recompute it locally.
+        const me = state.user;
+        const game: BingoGame = {
+          ...data,
+          is_host: !!me && (data.created_by === me.name || me.is_admin),
+        };
+        set((s) => ({
+          bingoGames: { ...s.bingoGames, [game.board_id]: game },
+        }));
+        break;
+      }
       case "folder.create":
       case "folder.update":
       case "folder.delete":

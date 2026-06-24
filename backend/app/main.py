@@ -23,6 +23,7 @@ from .routers import (
     admin,
     agent,
     auth,
+    bingo,
     boards,
     bots,
     channels,
@@ -104,6 +105,7 @@ app.include_router(members.router)
 app.include_router(search.router)
 app.include_router(push.router)
 app.include_router(boards.router)
+app.include_router(bingo.router)
 app.include_router(folders.router)
 app.include_router(files.router)
 app.include_router(bots.router)

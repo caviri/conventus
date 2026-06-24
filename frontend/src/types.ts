@@ -142,7 +142,7 @@ export interface SearchResult extends Message {
   location: SearchLocation;
 }
 
-export type BoardKind = "canvas" | "whiteboard" | "kanban" | "room";
+export type BoardKind = "canvas" | "whiteboard" | "kanban" | "room" | "bingo";
 
 export interface Board {
   id: number;
@@ -150,6 +150,27 @@ export interface Board {
   name: string;
   doc: string;
   folder_id: number | null;
+}
+
+export type BingoStatus = "setup" | "live" | "done";
+
+export interface BingoGame {
+  board_id: number;
+  words: string[];
+  free_space: boolean;
+  status: BingoStatus;
+  winner: string | null;
+  created_by: string | null;
+  is_host: boolean;
+}
+
+export interface BingoCell {
+  text: string;
+  free: boolean;
+}
+
+export interface BingoCard {
+  cells: BingoCell[];
 }
 
 export type View =
@@ -161,5 +182,6 @@ export type View =
   | { type: "whiteboard"; id: number }
   | { type: "kanban"; id: number }
   | { type: "room"; id: number }
+  | { type: "bingo"; id: number }
   | { type: "settings" }
   | { type: "admin" };

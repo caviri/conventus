@@ -127,6 +127,19 @@ CREATE TABLE IF NOT EXISTS collab_updates (
 );
 CREATE INDEX IF NOT EXISTS idx_collab_doc ON collab_updates(doc, id);
 
+-- One row per bingo board (kind = 'bingo'), keyed 1:1 by the board id. Holds the
+-- host-supplied word list and the live game state. Each player's 5x5 card is
+-- generated deterministically from (board_id, name), so nothing per-player is stored.
+CREATE TABLE IF NOT EXISTS bingo_games (
+    board_id    INTEGER PRIMARY KEY,             -- references boards.id
+    words       TEXT NOT NULL DEFAULT '[]',      -- json list of strings
+    free_space  INTEGER NOT NULL DEFAULT 1,      -- center cell is a free space
+    status      TEXT NOT NULL DEFAULT 'setup',   -- setup | live | done
+    winner      TEXT,                            -- name of the first player to win
+    created_by  TEXT,                            -- host (board creator)
+    started_at  REAL
+);
+
 -- Bots are OpenAI-compatible endpoints that participate in the room. Exactly one
 -- bot may carry is_assistant = 1 — the "Assistant" (the Gardener by default),
 -- which additionally powers private conversations, live-doc completion and kanban

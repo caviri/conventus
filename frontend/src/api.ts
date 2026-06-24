@@ -53,6 +53,8 @@ export const api = {
     request<T>(p, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
   patch: <T>(p: string, body?: unknown) =>
     request<T>(p, { method: "PATCH", body: body ? JSON.stringify(body) : undefined }),
+  put: <T>(p: string, body?: unknown) =>
+    request<T>(p, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
   del: <T>(p: string) => request<T>(p, { method: "DELETE" }),
 
   async upload(file: File) {
