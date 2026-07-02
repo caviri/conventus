@@ -24,7 +24,7 @@ import {
   ChevronDown,
   Sparkles,
   Radio,
-  Grid3x3,
+  Dices,
 } from "lucide-react";
 
 const BOARD_KIND = {
@@ -32,7 +32,7 @@ const BOARD_KIND = {
   whiteboard: { label: "whiteboard", icon: Pencil },
   kanban: { label: "kanban", icon: Columns3 },
   room: { label: "call room", icon: Radio },
-  bingo: { label: "bingo", icon: Grid3x3 },
+  game: { label: "game", icon: Dices },
 } as const;
 
 function boardIcon(kind: BoardKind, size = 16) {
@@ -109,7 +109,9 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
       confirmLabel: "Create",
     });
     if (!name) return;
-    const b = await api.post<{ id: number }>("/api/boards", { kind, name });
+    const body =
+      kind === "game" ? { kind, name, game_type: "bingo" } : { kind, name };
+    const b = await api.post<{ id: number }>("/api/boards", body);
     await refreshBoards();
     go({ type: kind, id: b.id });
   }
@@ -307,9 +309,9 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
                 </button>
                 <button
                   className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--c-elevated)]"
-                  onClick={() => createBoard("bingo")}
+                  onClick={() => createBoard("game")}
                 >
-                  <Grid3x3 size={15} /> New bingo
+                  <Dices size={15} /> New game (bingo)
                 </button>
                 <div className="my-1 border-t border-[var(--c-border)]" />
                 <button

@@ -10,17 +10,19 @@ from pydantic import BaseModel, Field
 from .. import boardstate, db
 from ..collab import hub as collab_hub
 from ..deps import current_user, require_admin
+from ..games import GAME_TYPES
 from ..ws import hub
 
 router = APIRouter(prefix="/api/boards", tags=["boards"])
 
 
-BOARD_KINDS = ("canvas", "whiteboard", "kanban", "room", "bingo")
+BOARD_KINDS = ("canvas", "whiteboard", "kanban", "room", "game")
 
 
 class BoardCreate(BaseModel):
-    kind: str  # canvas | whiteboard | kanban
+    kind: str  # canvas | whiteboard | kanban | room | game
     name: str = Field(min_length=1, max_length=40)
+    game_type: str = "bingo"  # for kind = game
 
 
 class BoardUpdate(BaseModel):
@@ -28,13 +30,17 @@ class BoardUpdate(BaseModel):
 
 
 def _serialize(row: dict) -> dict:
-    return {
+    board = {
         "id": row["id"],
         "kind": row["kind"],
         "name": row["name"],
         "doc": f"{row['kind']}-{row['id']}",
         "folder_id": row["folder_id"],
     }
+    if row["kind"] == "game":
+        game = db.query_one("SELECT game_type FROM games WHERE board_id = ?", (row["id"],))
+        board["game_type"] = game["game_type"] if game else "bingo"
+    return board
 
 
 @router.get("")
@@ -49,10 +55,21 @@ async def create_board(req: BoardCreate, user=Depends(current_user)):
         raise HTTPException(
             status_code=400, detail=f"kind must be one of {', '.join(BOARD_KINDS)}"
         )
+    if req.kind == "game" and req.game_type not in GAME_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"game_type must be one of {', '.join(GAME_TYPES)}",
+        )
     board_id = db.execute(
         "INSERT INTO boards(kind, name, created_at) VALUES (?, ?, ?)",
         (req.kind, req.name.strip(), db.now()),
     )
+    if req.kind == "game":
+        # The creator hosts: they publish the game once the room's draft is ready.
+        db.execute(
+            "INSERT INTO games(board_id, game_type, created_by, created_at) VALUES (?, ?, ?, ?)",
+            (board_id, req.game_type, user["name"], db.now()),
+        )
     board = _serialize(db.query_one("SELECT * FROM boards WHERE id = ?", (board_id,)))
     await hub.broadcast("board.create", board)
     return board
@@ -76,7 +93,7 @@ async def delete_board(board_id: int, user=Depends(require_admin)):
         raise HTTPException(status_code=404, detail="No such board")
     db.execute("DELETE FROM boards WHERE id = ?", (board_id,))
     db.execute("DELETE FROM collab_updates WHERE doc = ?", (f"{row['kind']}-{board_id}",))
-    db.execute("DELETE FROM bingo_games WHERE board_id = ?", (board_id,))
+    db.execute("DELETE FROM games WHERE board_id = ?", (board_id,))
     await hub.broadcast("board.delete", {"id": board_id})
     return {"ok": True}
 

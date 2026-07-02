@@ -61,6 +61,7 @@ delete it.
 - 🎨 **Collaborative whiteboards** *(Yjs CRDT)* — freehand drawing with colors and brush sizes, **images you can move, resize and rotate**, **zoom & pan**, a Minecraft-style **tool hotbar**, **comment pins that @tag people**, and live remote cursors.
 - 📋 **Kanban boards** *(Yjs CRDT)* — columns and cards you can drag between lists, viewable as a **board, table, or list**. Cards carry **images, keywords, an assignee, a due date, and a link**.
 - 🎙️ **Call rooms** *(WebRTC)* — a live call right in the sidebar: **continuous, lip-synced audio + video** for everyone who joins, streamed **peer-to-peer**, with mute (or hold-**Space** to talk), a camera toggle, resizable tiles, and an optional lo-fi filter.
+- 🎲 **Game boards** — play together, starting with **bingo**: the room **drafts the word list collaboratively** (a shared live doc with remote cursors), the host **opens** the game, and everyone gets their **own shuffled 5×5 card**. Wins are validated server-side and announced in chat; new game types plug in beside bingo.
 
 **Bots & automation**
 - 🤖 **Bots** — wire up any **OpenAI-compatible** endpoint and let an agent live in a channel (reply on @mention or every message), with **streaming** replies and avatars.
@@ -161,7 +162,7 @@ Interactive docs are served at `/docs` (FastAPI / Swagger).
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Backend** — `backend/app`: routers (auth, channels, dms, messages, search, boards, files, bots, members, admin), a WebSocket presence/fan-out hub, a persistent Yjs collab relay (with log compaction), a WebRTC call-room signaling relay (media stays peer-to-peer), and link-preview + streaming-bot engines. SQLite in WAL mode; nothing external to run.
+- **Backend** — `backend/app`: routers (auth, channels, dms, messages, search, boards, games, files, bots, members, admin), a WebSocket presence/fan-out hub, a persistent Yjs collab relay (with log compaction), a WebRTC call-room signaling relay (media stays peer-to-peer), and link-preview + streaming-bot engines. SQLite in WAL mode; nothing external to run.
 - **Frontend** — `frontend/src`: React + Zustand + Tailwind v4, a reconnecting WebSocket, Yjs for the collaborative boards (live documents, whiteboards, kanban), and a WebRTC mesh for call rooms. No accounts — just a signed session token from the room password.
 
 ## Theming

@@ -127,16 +127,17 @@ CREATE TABLE IF NOT EXISTS collab_updates (
 );
 CREATE INDEX IF NOT EXISTS idx_collab_doc ON collab_updates(doc, id);
 
--- One row per bingo board (kind = 'bingo'), keyed 1:1 by the board id. Holds the
--- host-supplied word list and the live game state. Each player's 5x5 card is
--- generated deterministically from (board_id, name), so nothing per-player is stored.
-CREATE TABLE IF NOT EXISTS bingo_games (
+-- One row per game board (kind = 'game'), keyed 1:1 by the board id. The setup
+-- draft is edited collaboratively in the board's Yjs doc; publishing freezes it
+-- into config (json, shaped per game_type) and the game goes live.
+CREATE TABLE IF NOT EXISTS games (
     board_id    INTEGER PRIMARY KEY,             -- references boards.id
-    words       TEXT NOT NULL DEFAULT '[]',      -- json list of strings
-    free_space  INTEGER NOT NULL DEFAULT 1,      -- center cell is a free space
+    game_type   TEXT NOT NULL DEFAULT 'bingo',
+    config      TEXT NOT NULL DEFAULT '{}',      -- frozen at publish (json)
     status      TEXT NOT NULL DEFAULT 'setup',   -- setup | live | done
     winner      TEXT,                            -- name of the first player to win
     created_by  TEXT,                            -- host (board creator)
+    created_at  REAL,
     started_at  REAL
 );
 
@@ -237,6 +238,10 @@ def init() -> None:
     with _lock:
         conn = connect()
         now = time.time()
+        # Briefly, bingo shipped as its own board kind with a bespoke table.
+        # Fold any such boards into the generic games shape.
+        conn.execute("UPDATE boards SET kind = 'game' WHERE kind = 'bingo'")
+        conn.execute("DROP TABLE IF EXISTS bingo_games")
         existing = conn.execute("SELECT COUNT(*) AS n FROM channels").fetchone()["n"]
         if existing == 0:
             conn.execute(

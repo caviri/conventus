@@ -21,7 +21,7 @@ from ..ws import hub
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 TABLES = [
-    "users", "folders", "channels", "boards", "dms",
+    "users", "folders", "channels", "boards", "games", "dms",
     "messages", "reactions", "files", "bots",
 ]
 

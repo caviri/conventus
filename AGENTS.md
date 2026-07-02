@@ -28,8 +28,9 @@ backend/app/
   webpush.py     VAPID keys + pywebpush delivery
   bots.py        OpenAI-compatible streaming bots
   previews.py    OpenGraph link previews
+  games.py       per-game-type rules (bingo) for game boards
   routers/       auth, channels, dms, messages, members, search, boards,
-                 files, bots, push, admin
+                 games, files, bots, push, admin
 frontend/src/
   store.ts       Zustand store (state + WS event handling)
   api.ts         fetch wrapper (bearer token)

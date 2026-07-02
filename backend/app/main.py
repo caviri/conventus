@@ -23,7 +23,6 @@ from .routers import (
     admin,
     agent,
     auth,
-    bingo,
     boards,
     bots,
     channels,
@@ -31,6 +30,7 @@ from .routers import (
     dms,
     files,
     folders,
+    games,
     members,
     messages,
     push,
@@ -73,6 +73,7 @@ TAGS_METADATA = [
     {"name": "search", "description": "Search messages across channels and your DMs."},
     {"name": "members", "description": "Roster, presence, status and avatars."},
     {"name": "boards", "description": "Collaborative canvases and whiteboards."},
+    {"name": "games", "description": "Game boards: draft together, publish, play (bingo)."},
     {"name": "files", "description": "File uploads and the ephemeral Drive."},
     {"name": "bots", "description": "OpenAI-compatible channel bots (admin)."},
     {"name": "agent", "description": "The room Assistant: config, private conversations, completion."},
@@ -105,7 +106,7 @@ app.include_router(members.router)
 app.include_router(search.router)
 app.include_router(push.router)
 app.include_router(boards.router)
-app.include_router(bingo.router)
+app.include_router(games.router)
 app.include_router(folders.router)
 app.include_router(files.router)
 app.include_router(bots.router)

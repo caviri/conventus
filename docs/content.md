@@ -62,9 +62,9 @@ audio/video open in a modal without leaving the room.
 ### 📝 Real-time collaboration (Yjs CRDT)
 Boards live right under the channels list; the **+** next to *Channels* opens a
 menu to spin up a **folder** (to organize them — drag channels and boards into
-collapsible folders, shared across the room) or any of **four** board kinds.
-Three are collaborative CRDT surfaces; the fourth is a live **call room** (in
-its own section below):
+collapsible folders, shared across the room) or any of **five** board kinds.
+Three are collaborative CRDT surfaces; the others are a live **call room** and a
+**game board** (each in its own section below):
 - **Live documents** — shared markdown scratchpads with live preview,
   **multiple named** boards, **live remote cursors**, and one-click
   **download as Markdown or PDF**.
@@ -103,6 +103,29 @@ sound is automatically kept **in sync with their video** (lip-synced).
 
 ![Join a call room](img/room-join.png)
 ![A live call — continuous, lip-synced audio + video, streamed peer-to-peer](img/room-call.png)
+
+### 🎲 Game boards
+A board kind for playing together — the first game is **bingo**. Games have a
+**collaborative preparation phase**: the draft lives in the board's shared Yjs
+doc, so the whole room writes the word list *together* (live, with remote
+cursors) before the host opens play.
+
+- **Draft together** — one word or phrase per line; everyone can add and edit,
+  and a counter tracks progress toward a full card (24 words with the FREE
+  center square, 25 without).
+- **Publish** — the host (the board's creator, or any admin) hits **Open game**:
+  the draft is validated and frozen, the game is **announced in the default
+  channel**, and everyone playing switches to their card automatically.
+- **Play** — each player gets their **own shuffled 5×5 card**, generated
+  deterministically from their name (refresh-proof, nothing stored per player).
+  Click squares as they happen; the first completed **row, column or diagonal**
+  wins — claims are validated server-side, and the winner is announced to the
+  room. The host can reset for another round; the draft survives resets.
+- **Extensible** — games are a family: one `games` table and one `/api/games`
+  router with per-type rules, so new game types plug in beside bingo.
+
+![Drafting the bingo word list together — a shared, live document](img/game-setup.png)
+![A live bingo card, dealt per player](img/game-live.png)
 
 ### 🤖 Bots & automation
 - **Bots** — wire up any **OpenAI-compatible** endpoint and let an agent live in
@@ -404,8 +427,8 @@ Use the admin password in the same `"password"` field to get an **admin** token
 | `POST /api/members/status`     | `{status}`                                    |
 | `POST /api/members/avatar`     | `{avatar}` (emoji or URL)                     |
 | `GET  /api/search?q=`          | Search channels + your DMs                    |
-| `GET  /api/boards`             | List boards (live documents, whiteboards, kanban) |
-| `POST /api/boards`             | `{kind, name}` (`canvas`/`whiteboard`/`kanban`) |
+| `GET  /api/boards`             | List boards (live documents, whiteboards, kanban, call rooms, games) |
+| `POST /api/boards`             | `{kind, name, game_type?}` (`canvas`/`whiteboard`/`kanban`/`room`/`game`) |
 | `PATCH /api/boards/{id}`       | `{name}`                                       |
 | `DELETE /api/boards/{id}` 🔒   | Removes the board + its collab log            |
 | `GET  /api/boards/{id}/content`  | Kanban → `{columns, cards}`; live document → `{text}` |
@@ -416,6 +439,18 @@ Use the admin password in the same `"password"` field to get an **admin** token
 | `GET  /api/files`              | The Drive listing                             |
 | `GET  /api/files/{id}/raw`     | Stream a file (`?download=true` to download)  |
 | `DELETE /api/files/{id}`       | Uploader or admin                             |
+
+**Games** (boards of kind `game`; the host is the board's creator or an admin)
+
+| Method & path                   | Body / notes                                  |
+| ------------------------------- | --------------------------------------------- |
+| `GET  /api/games/{id}`          | State: `{game_type, status: setup·live·done, winner, created_by, config, is_host}` |
+| `GET  /api/games/{id}/setup`    | The collaborative draft `{text, options}` (same data live editors see via Yjs) |
+| `PUT  /api/games/{id}/setup`    | Write the draft `{text?, options?}` — anyone; it's collaborative |
+| `POST /api/games/{id}/publish`  | Host: validate + freeze the draft, go live, announce in chat |
+| `GET  /api/games/{id}/view`     | Your private view — bingo: your 25 `{text, free}` cells |
+| `POST /api/games/{id}/win`      | Claim a win `{data: {marked: [i, …]}}` — validated server-side |
+| `POST /api/games/{id}/reset`    | Host: back to setup for another round (the draft survives) |
 
 **Bots · push · admin**
 

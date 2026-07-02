@@ -64,6 +64,14 @@ def read_canvas(doc_name: str) -> dict[str, Any]:
     return {"text": text}
 
 
+def read_game_setup(doc_name: str) -> dict[str, Any]:
+    """A game board's collaborative setup draft: free text + an options map."""
+    doc = _load(doc_name)
+    text = str(doc.get("words", type=Text))
+    options = doc.get("options", type=Map).to_py() or {}
+    return {"text": text, "options": options}
+
+
 # --- writes --------------------------------------------------------------
 
 def add_card(doc_name: str, fields: dict[str, Any]) -> tuple[dict[str, Any], bytes]:
@@ -99,6 +107,24 @@ def add_column(doc_name: str, title: str) -> tuple[dict[str, Any], bytes]:
 
     update = _mutate(doc_name, fn)
     return col, update
+
+
+def write_game_setup(
+    doc_name: str, text: str | None, options: dict[str, Any] | None
+) -> bytes:
+    """Replace parts of a game's setup draft over REST (bots, scripts). Only the
+    provided pieces change; live viewers receive the same incremental update."""
+
+    def fn(doc: Doc) -> None:
+        if text is not None:
+            t = doc.get("words", type=Text)
+            if len(t):
+                del t[0 : len(t)]
+            t.insert(0, text)
+        for key, val in (options or {}).items():
+            doc.get("options", type=Map)[key] = val
+
+    return _mutate(doc_name, fn)
 
 
 def append_text(doc_name: str, text: str) -> tuple[bytes, int]:
