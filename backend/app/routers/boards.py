@@ -15,7 +15,7 @@ from ..ws import hub
 router = APIRouter(prefix="/api/boards", tags=["boards"])
 
 
-BOARD_KINDS = ("canvas", "whiteboard", "kanban", "room")
+BOARD_KINDS = ("canvas", "whiteboard", "kanban", "room", "bingo")
 
 
 class BoardCreate(BaseModel):
@@ -76,6 +76,7 @@ async def delete_board(board_id: int, user=Depends(require_admin)):
         raise HTTPException(status_code=404, detail="No such board")
     db.execute("DELETE FROM boards WHERE id = ?", (board_id,))
     db.execute("DELETE FROM collab_updates WHERE doc = ?", (f"{row['kind']}-{board_id}",))
+    db.execute("DELETE FROM bingo_games WHERE board_id = ?", (board_id,))
     await hub.broadcast("board.delete", {"id": board_id})
     return {"ok": True}
 

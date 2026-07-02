@@ -13,6 +13,7 @@ import Canvas from "./components/Canvas";
 import Whiteboard from "./components/Whiteboard";
 import Kanban from "./components/Kanban";
 import Room from "./components/Room";
+import Bingo from "./components/Bingo";
 import Settings from "./components/Settings";
 import AdminPanel from "./components/AdminPanel";
 import Search from "./components/Search";
@@ -155,7 +156,8 @@ export default function App() {
     view.type === "canvas" ||
     view.type === "whiteboard" ||
     view.type === "kanban" ||
-    view.type === "room"
+    view.type === "room" ||
+    view.type === "bingo"
       ? boards.find((b) => b.id === view.id)
       : undefined;
 
@@ -211,6 +213,8 @@ export default function App() {
           board && (
             <Room key={board.doc} id={board.id} name={board.doc} title={board.name} />
           )
+        ) : view.type === "bingo" ? (
+          board && <Bingo key={board.doc} id={board.id} title={board.name} />
         ) : view.type === "settings" ? (
           <Settings />
         ) : (
