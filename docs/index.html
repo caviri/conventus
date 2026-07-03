@@ -201,8 +201,14 @@ sound is automatically kept **in sync with their video** (lip-synced).
 - **Peer-to-peer.** Media streams directly between participants in a full mesh —
   the server only relays the initial signaling, never the audio or video.
 - **Mic & camera controls** — mute/unmute (or hold **Space** to talk while
-  muted), flip your camera on or off anytime, choose a video-quality preset, and
-  toggle an optional **lo-fi filter** to match the room's aesthetic.
+  muted), and flip your camera on or off anytime.
+- **You choose how the room perceives you.** Quality and effects are applied
+  **on your device, before anything is sent** — peers just play what arrives:
+  a video-quality preset (resolution/framerate/bitrate ceilings), a **dithered
+  cam** (the chat's Bayer-duotone lo-fi look, rendered onto a canvas and
+  streamed at low res — the raw camera never leaves your machine), and
+  **voice presets** (*Full*, *Compressed*, or *Lo-fi radio*, which band-passes
+  your mic through a telephone-style WebAudio chain and caps the Opus bitrate).
 - **Resizable tiles** with a live **speaking** ring on whoever's talking — bump
   any participant up to 5×.
 - **Best for small groups.** A mesh is perfect for a handful of people; a large
@@ -214,6 +220,7 @@ sound is automatically kept **in sync with their video** (lip-synced).
 
 ![Join a call room](img/room-join.png)
 ![A live call — continuous, lip-synced audio + video, streamed peer-to-peer](img/room-call.png)
+![The dithered cam as a peer receives it — processed on the sender's device](img/call-dither.png)
 
 ### 🎲 Game boards
 A board kind for playing together — the first game is **bingo**. Games have a

@@ -60,7 +60,7 @@ delete it.
 - 📝 **Live documents** *(Yjs CRDT)* — shared markdown scratchpads with live preview, **multiple named** boards, **live remote cursors**, and one-click **download as Markdown or PDF**.
 - 🎨 **Collaborative whiteboards** *(Yjs CRDT)* — freehand drawing with colors and brush sizes, **images you can move, resize and rotate**, **zoom & pan**, a Minecraft-style **tool hotbar**, **comment pins that @tag people**, and live remote cursors.
 - 📋 **Kanban boards** *(Yjs CRDT)* — columns and cards you can drag between lists, viewable as a **board, table, or list**. Cards carry **images, keywords, an assignee, a due date, and a link**.
-- 🎙️ **Call rooms** *(WebRTC)* — a live call right in the sidebar: **continuous, lip-synced audio + video** for everyone who joins, streamed **peer-to-peer**, with mute (or hold-**Space** to talk), a camera toggle, resizable tiles, and an optional lo-fi filter.
+- 🎙️ **Call rooms** *(WebRTC)* — a live call right in the sidebar: **continuous, lip-synced audio + video** for everyone who joins, streamed **peer-to-peer**, with mute (or hold-**Space** to talk), a camera toggle, and resizable tiles. **You choose how you're perceived** — video quality, a **dithered duotone cam** (the chat's lo-fi look), and voice compression (*Full / Compressed / Lo-fi radio*) are all applied **on your device before anything is sent**.
 - 🎲 **Game boards** — play together, starting with **bingo**: the room **drafts the word list collaboratively** (a shared live doc with remote cursors), the host **opens** the game, and everyone gets their **own shuffled 5×5 card**. Wins are validated server-side and announced in chat; new game types plug in beside bingo.
 
 **Bots & automation**

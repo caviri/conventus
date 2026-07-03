@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getToken, api } from "../api";
 import { useStore } from "../store";
+import { ditherDuotone } from "../dither";
 import BoardActions from "./BoardActions";
 import {
   Radio,
@@ -45,6 +46,21 @@ const QUALITY = {
   high: { label: "High", bitrate: 1_200_000, w: 1280, h: 720, fps: 30 },
 } as const;
 type QualityKey = keyof typeof QUALITY;
+
+// The dithered cam — the chat's Bayer/duotone look, rendered on the sender's
+// device: camera → canvas → ditherDuotone → captureStream. Peers receive the
+// processed frames; the raw camera never leaves this machine.
+const DITHER = { w: 240, h: 180, fps: 12, bitrate: 150_000 };
+
+// Outgoing voice presets, applied before encoding. "Compressed" just caps the
+// Opus bitrate; "Lo-fi radio" additionally routes the mic through a WebAudio
+// telephone band-pass + soft clip on-device.
+const VOICE = {
+  full: { label: "Full", bitrate: 0 }, // 0 = browser default
+  low: { label: "Compressed", bitrate: 14_000 },
+  radio: { label: "Lo-fi radio", bitrate: 12_000 },
+} as const;
+type VoiceKey = keyof typeof VOICE;
 
 const DEFAULT_ICE: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 const SPEAK_RMS = 0.045; // RMS above this = "talking"
@@ -96,7 +112,9 @@ export default function Room({
   const [muted, setMuted] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
   const [quality, setQuality] = useState<QualityKey>("medium");
-  const [lofi, setLofi] = useState(false);
+  const [dither, setDither] = useState(false);
+  const [voice, setVoice] = useState<VoiceKey>("full");
+  const [preview, setPreview] = useState<MediaStream | null>(null); // dithered self-view
   const [showSettings, setShowSettings] = useState(false);
   const [scales, setScales] = useState<Record<string, number>>({});
 
@@ -106,7 +124,20 @@ export default function Room({
   const selfPidRef = useRef<string>("");
   const peersRef = useRef<Map<string, PeerConn>>(new Map());
   const qualityRef = useRef<QualityKey>("medium");
+  const ditherOnRef = useRef(false);
+  const voiceRef = useRef<VoiceKey>("full");
   const pttRef = useRef(false); // spacebar push-to-talk currently held
+
+  // The on-device processing pipelines (what peers actually receive).
+  const ditherPipeRef = useRef<{
+    video: HTMLVideoElement;
+    timer: number;
+    track: MediaStreamTrack;
+  } | null>(null);
+  const radioRef = useRef<{
+    nodes: AudioNode[];
+    track: MediaStreamTrack;
+  } | null>(null);
 
   // Audio-level metering for the "who's talking" ring.
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -130,17 +161,22 @@ export default function Room({
     return !!localStreamRef.current?.getAudioTracks()[0]?.enabled;
   }
 
+  function ensureAudioCtx(): AudioContext {
+    let ctx = audioCtxRef.current;
+    if (!ctx) {
+      const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+      ctx = new Ctx();
+      audioCtxRef.current = ctx;
+    }
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    return ctx;
+  }
+
   // --- Audio metering ------------------------------------------------------
   function attachAnalyser(key: string, stream: MediaStream) {
     if (!stream.getAudioTracks().length || analysersRef.current.has(key)) return;
     try {
-      let ctx = audioCtxRef.current;
-      if (!ctx) {
-        const Ctx = window.AudioContext || (window as any).webkitAudioContext;
-        ctx = new Ctx();
-        audioCtxRef.current = ctx;
-      }
-      if (ctx.state === "suspended") ctx.resume().catch(() => {});
+      const ctx = ensureAudioCtx();
       const src = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 512;
@@ -167,6 +203,98 @@ export default function Room({
     }
   }
 
+  // --- On-device outgoing effects -------------------------------------------
+  // Both pipelines transform the media *before* it reaches the encoder, so the
+  // sender decides how they're perceived — peers just play what arrives.
+
+  function startDitherPipe(raw: MediaStreamTrack): MediaStreamTrack {
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.srcObject = new MediaStream([raw]);
+    video.play().catch(() => {});
+    const canvas = document.createElement("canvas");
+    canvas.width = DITHER.w;
+    canvas.height = DITHER.h;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+    const timer = window.setInterval(() => {
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      if (video.readyState < 2 || !vw || !vh) return;
+      // Cover-crop the camera frame into the small canvas, then dither.
+      const s = Math.max(DITHER.w / vw, DITHER.h / vh);
+      ctx.drawImage(video, (DITHER.w - vw * s) / 2, (DITHER.h - vh * s) / 2, vw * s, vh * s);
+      ditherDuotone(ctx, DITHER.w, DITHER.h);
+    }, 1000 / DITHER.fps);
+    const track = canvas.captureStream(DITHER.fps).getVideoTracks()[0];
+    ditherPipeRef.current = { video, timer, track };
+    return track;
+  }
+
+  function stopDitherPipe() {
+    const d = ditherPipeRef.current;
+    if (!d) return;
+    clearInterval(d.timer);
+    d.track.stop();
+    d.video.srcObject = null;
+    ditherPipeRef.current = null;
+  }
+
+  // Mild tanh saturation — the "driven through a small speaker" part of radio.
+  function softClipCurve(drive: number): Float32Array<ArrayBuffer> {
+    const n = 256;
+    const curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * 2 - 1;
+      curve[i] = Math.tanh(drive * x) / Math.tanh(drive);
+    }
+    return curve;
+  }
+
+  function startRadioChain(rawTrack: MediaStreamTrack): MediaStreamTrack {
+    const ctx = ensureAudioCtx();
+    const src = ctx.createMediaStreamSource(new MediaStream([rawTrack]));
+    const hp = ctx.createBiquadFilter();
+    hp.type = "highpass";
+    hp.frequency.value = 300; // telephone band: ~300–3400 Hz
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 3400;
+    const shaper = ctx.createWaveShaper();
+    shaper.curve = softClipCurve(4);
+    const dest = ctx.createMediaStreamDestination();
+    src.connect(hp);
+    hp.connect(lp);
+    lp.connect(shaper);
+    shaper.connect(dest);
+    const track = dest.stream.getAudioTracks()[0];
+    radioRef.current = { nodes: [src, hp, lp, shaper, dest], track };
+    return track;
+  }
+
+  function stopRadioChain() {
+    const r = radioRef.current;
+    if (!r) return;
+    for (const node of r.nodes) {
+      try {
+        node.disconnect();
+      } catch {
+        /* ignore */
+      }
+    }
+    r.track.stop();
+    radioRef.current = null;
+  }
+
+  // The tracks peers should receive right now (processed when an effect is on).
+  function outgoingAudioTrack(): MediaStreamTrack | undefined {
+    return radioRef.current?.track ?? localStreamRef.current?.getAudioTracks()[0];
+  }
+
+  function outgoingVideoTrack(): MediaStreamTrack | undefined {
+    return ditherPipeRef.current?.track ?? localStreamRef.current?.getVideoTracks()[0];
+  }
+
   // --- Peer connections ----------------------------------------------------
   function makePeer(pid: string, peerName: string): PeerConn {
     const pc = new RTCPeerConnection({ iceServers: iceRef.current });
@@ -179,8 +307,15 @@ export default function Room({
     };
     peersRef.current.set(pid, conn);
 
+    // Late joiners get whatever we're currently sending — processed tracks
+    // when an on-device effect is active, raw otherwise.
     const local = localStreamRef.current;
-    if (local) for (const t of local.getTracks()) pc.addTrack(t, local);
+    if (local) {
+      const audio = outgoingAudioTrack();
+      const video = outgoingVideoTrack();
+      if (audio) pc.addTrack(audio, local);
+      if (video) pc.addTrack(video, local);
+    }
 
     pc.onnegotiationneeded = async () => {
       try {
@@ -206,7 +341,7 @@ export default function Room({
       attachAnalyser(pid, stream);
     };
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === "connected") applyBitrate();
+      if (pc.connectionState === "connected") applySendParams();
       else if (pc.connectionState === "failed") {
         try {
           pc.restartIce();
@@ -349,14 +484,18 @@ export default function Room({
     return { width: { ideal: q.w }, height: { ideal: q.h }, frameRate: { ideal: q.fps } };
   }
 
-  async function applyBitrate() {
-    const max = QUALITY[qualityRef.current].bitrate;
+  async function applySendParams() {
+    const videoMax = ditherOnRef.current ? DITHER.bitrate : QUALITY[qualityRef.current].bitrate;
+    const audioMax = VOICE[voiceRef.current].bitrate;
     for (const conn of peersRef.current.values()) {
       for (const sender of conn.pc.getSenders()) {
-        if (sender.track?.kind !== "video") continue;
+        const kind = sender.track?.kind;
+        if (!kind) continue;
         const params = sender.getParameters();
         if (!params.encodings || !params.encodings.length) params.encodings = [{}];
-        params.encodings[0].maxBitrate = max;
+        if (kind === "video") params.encodings[0].maxBitrate = videoMax;
+        else if (audioMax) params.encodings[0].maxBitrate = audioMax;
+        else delete params.encodings[0].maxBitrate;
         try {
           await sender.setParameters(params);
         } catch {
@@ -370,36 +509,64 @@ export default function Room({
     if (cameraOn) return;
     try {
       const cam = await navigator.mediaDevices.getUserMedia({ video: videoConstraints() });
-      const track = cam.getVideoTracks()[0];
-      if (!track) return;
+      const raw = cam.getVideoTracks()[0];
+      if (!raw) return;
       const local = localStreamRef.current;
       if (!local) {
-        track.stop();
+        raw.stop();
         return;
       }
-      local.addTrack(track);
+      local.addTrack(raw);
+      const sendTrack = ditherOnRef.current ? startDitherPipe(raw) : raw;
       // Add to every peer — each triggers a renegotiation automatically.
-      for (const conn of peersRef.current.values()) conn.pc.addTrack(track, local);
+      for (const conn of peersRef.current.values()) conn.pc.addTrack(sendTrack, local);
+      setPreview(ditherOnRef.current ? new MediaStream([sendTrack]) : null);
       setCameraOn(true);
       send({ type: "state", muted, cam: true });
-      applyBitrate();
+      applySendParams();
     } catch {
       /* permission denied / no camera — stay audio-only */
     }
   }
 
   function stopCamera() {
-    const track = localStreamRef.current?.getVideoTracks()[0];
-    if (track) {
-      for (const conn of peersRef.current.values()) {
-        const sender = conn.pc.getSenders().find((s) => s.track === track);
-        if (sender) conn.pc.removeTrack(sender);
+    stopDitherPipe();
+    setPreview(null);
+    for (const conn of peersRef.current.values()) {
+      for (const sender of conn.pc.getSenders()) {
+        if (sender.track?.kind === "video") conn.pc.removeTrack(sender);
       }
-      track.stop();
-      localStreamRef.current?.removeTrack(track);
+    }
+    const raw = localStreamRef.current?.getVideoTracks()[0];
+    if (raw) {
+      raw.stop();
+      localStreamRef.current?.removeTrack(raw);
     }
     setCameraOn(false);
     send({ type: "state", muted, cam: false });
+  }
+
+  // Flip the dithered cam on/off mid-call: swap what every peer's video sender
+  // is sending (replaceTrack — no renegotiation) and update the self-preview.
+  async function setDitherMode(on: boolean) {
+    setDither(on);
+    ditherOnRef.current = on;
+    const raw = localStreamRef.current?.getVideoTracks()[0];
+    if (!cameraOn || !raw) return; // applies when the camera next starts
+    const next = on ? startDitherPipe(raw) : raw;
+    if (!on) stopDitherPipe();
+    for (const conn of peersRef.current.values()) {
+      for (const sender of conn.pc.getSenders()) {
+        if (sender.track?.kind !== "video") continue;
+        try {
+          await sender.replaceTrack(next);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    setPreview(on ? new MediaStream([next]) : null);
+    applySendParams();
   }
 
   function cleanup() {
@@ -411,6 +578,8 @@ export default function Room({
       }
     }
     peersRef.current.clear();
+    stopDitherPipe();
+    stopRadioChain();
     for (const key of [...analysersRef.current.keys()]) detachAnalyser(key);
     audioCtxRef.current?.close().catch(() => {});
     audioCtxRef.current = null;
@@ -427,6 +596,7 @@ export default function Room({
     setSpeaking(new Set());
     setMuted(false);
     setCameraOn(false);
+    setPreview(null);
     setScales({});
     pttRef.current = false;
   }
@@ -436,10 +606,40 @@ export default function Room({
     qualityRef.current = quality;
     if (cameraOn) {
       localStreamRef.current?.getVideoTracks()[0]?.applyConstraints(videoConstraints()).catch(() => {});
-      applyBitrate();
+      applySendParams();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quality]);
+
+  // Voice preset: swap the outgoing audio track between the raw mic and the
+  // on-device radio chain, and cap the Opus bitrate. Mute/PTT keep working —
+  // they toggle the raw mic track, which feeds the chain.
+  useEffect(() => {
+    voiceRef.current = voice;
+    if (!joined) return;
+    (async () => {
+      const raw = localStreamRef.current?.getAudioTracks()[0];
+      if (!raw) return;
+      let next: MediaStreamTrack = raw;
+      if (voice === "radio") {
+        next = radioRef.current?.track ?? startRadioChain(raw);
+      } else {
+        stopRadioChain();
+      }
+      for (const conn of peersRef.current.values()) {
+        for (const sender of conn.pc.getSenders()) {
+          if (sender.track?.kind !== "audio") continue;
+          try {
+            await sender.replaceTrack(next);
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+      applySendParams();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voice, joined]);
 
   // Audio-level loop → "talking" rings.
   useEffect(() => {
@@ -519,7 +719,8 @@ export default function Room({
       key: "self",
       label: `${selfName} (you)`,
       me: true,
-      stream: localStreamRef.current || undefined,
+      // With the dithered cam on, preview what peers actually receive.
+      stream: preview || localStreamRef.current || undefined,
       cam: cameraOn,
       muted,
       talking: speaking.has("self"),
@@ -575,7 +776,8 @@ export default function Room({
             <div className="fixed inset-0 z-30" onClick={() => setShowSettings(false)} />
             <div className="card absolute right-3 top-full z-40 mt-1 flex w-72 max-w-[calc(100vw-1.5rem)] flex-col gap-3 p-3 text-sm shadow-2xl fade-in">
               <p className="text-xs text-[var(--c-muted)]">
-                Tunes <em>your</em> outgoing video. WebRTC adapts to the network within these limits.
+                How the room sees and hears <em>you</em> — applied on your device,
+                before anything is sent.
               </p>
               <label className="flex items-center justify-between gap-3">
                 <span>Video quality</span>
@@ -592,8 +794,29 @@ export default function Room({
                 </select>
               </label>
               <label className="flex cursor-pointer items-center justify-between gap-3">
-                <span>Lo-fi filter</span>
-                <input type="checkbox" checked={lofi} onChange={(e) => setLofi(e.target.checked)} />
+                <span>
+                  Dithered cam{" "}
+                  <span className="text-xs text-[var(--c-muted)]">(duotone lo-fi)</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={dither}
+                  onChange={(e) => setDitherMode(e.target.checked)}
+                />
+              </label>
+              <label className="flex items-center justify-between gap-3">
+                <span>Voice</span>
+                <select
+                  className="input !w-auto !py-1 text-xs"
+                  value={voice}
+                  onChange={(e) => setVoice(e.target.value as VoiceKey)}
+                >
+                  {(Object.keys(VOICE) as VoiceKey[]).map((k) => (
+                    <option key={k} value={k}>
+                      {VOICE[k].label}
+                    </option>
+                  ))}
+                </select>
               </label>
               <p className="mt-1 border-t border-[var(--c-border)] pt-2 text-xs text-[var(--c-muted)]">
                 Mics stay open — hit <span className="text-[var(--c-text)]">Mute</span> for privacy,
@@ -638,11 +861,7 @@ export default function Room({
                     className={`relative overflow-hidden rounded-lg bg-[var(--c-elevated)] transition ${
                       t.talking ? "ring-2 ring-[var(--c-accent)]" : ""
                     }`}
-                    style={{
-                      width: 128 * scale,
-                      height: 96 * scale,
-                      filter: lofi ? "grayscale(1) contrast(1.35) brightness(1.05)" : undefined,
-                    }}
+                    style={{ width: 128 * scale, height: 96 * scale }}
                   >
                     {/* Stream is always mounted (audio keeps playing); avatar overlays when camera is off. */}
                     {t.stream && <MediaTile stream={t.stream} muted={t.me} mirror={t.me} />}
