@@ -80,8 +80,20 @@ function MediaTile({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (el.srcObject !== stream) el.srcObject = stream;
-    el.play().catch(() => {});
+    // Safari (incl. iOS PWA) won't render tracks that join an already-playing
+    // stream unless srcObject is re-assigned — so re-sync on addtrack/removetrack
+    // (fired for remotely-added tracks) as well as on stream identity changes.
+    const sync = () => {
+      el.srcObject = stream;
+      el.play().catch(() => {});
+    };
+    sync();
+    stream.addEventListener("addtrack", sync);
+    stream.addEventListener("removetrack", sync);
+    return () => {
+      stream.removeEventListener("addtrack", sync);
+      stream.removeEventListener("removetrack", sync);
+    };
   }, [stream]);
   return (
     <video
@@ -114,7 +126,8 @@ export default function Room({
   const [quality, setQuality] = useState<QualityKey>("medium");
   const [dither, setDither] = useState(false);
   const [voice, setVoice] = useState<VoiceKey>("full");
-  const [preview, setPreview] = useState<MediaStream | null>(null); // dithered self-view
+  const [preview, setPreview] = useState<MediaStream | null>(null); // processed self-view
+  const [camNote, setCamNote] = useState(""); // why the camera didn't start
   const [showSettings, setShowSettings] = useState(false);
   const [scales, setScales] = useState<Record<string, number>>({});
 
@@ -507,25 +520,63 @@ export default function Room({
 
   async function startCamera() {
     if (cameraOn) return;
+    setCamNote("");
     try {
-      const cam = await navigator.mediaDevices.getUserMedia({ video: videoConstraints() });
-      const raw = cam.getVideoTracks()[0];
-      if (!raw) return;
+      // iOS allows only ONE active capture session per page: grabbing video in
+      // a second getUserMedia blanks the camera and/or kills the mic captured
+      // at join. Ask for a fresh combined mic+camera stream instead, then swap
+      // the new mic track in everywhere the old one was used.
+      const combined = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: videoConstraints(),
+      });
       const local = localStreamRef.current;
-      if (!local) {
-        raw.stop();
+      const raw = combined.getVideoTracks()[0];
+      const newMic = combined.getAudioTracks()[0];
+      if (!local || !raw) {
+        combined.getTracks().forEach((t) => t.stop());
         return;
       }
+
+      if (newMic) {
+        const oldMic = local.getAudioTracks()[0];
+        newMic.enabled = oldMic ? oldMic.enabled : !muted; // keep mute/PTT state
+        local.addTrack(newMic);
+        if (oldMic) {
+          local.removeTrack(oldMic);
+          oldMic.stop();
+        }
+        detachAnalyser("self");
+        attachAnalyser("self", local);
+        let audioSend: MediaStreamTrack = newMic;
+        if (voiceRef.current === "radio") {
+          stopRadioChain();
+          audioSend = startRadioChain(newMic);
+        }
+        for (const conn of peersRef.current.values()) {
+          for (const sender of conn.pc.getSenders()) {
+            if (sender.track?.kind !== "audio") continue;
+            try {
+              await sender.replaceTrack(audioSend);
+            } catch {
+              /* ignore */
+            }
+          }
+        }
+      }
+
       local.addTrack(raw);
       const sendTrack = ditherOnRef.current ? startDitherPipe(raw) : raw;
       // Add to every peer — each triggers a renegotiation automatically.
       for (const conn of peersRef.current.values()) conn.pc.addTrack(sendTrack, local);
-      setPreview(ditherOnRef.current ? new MediaStream([sendTrack]) : null);
+      // A fresh MediaStream forces Safari to actually show the self-preview.
+      setPreview(new MediaStream([sendTrack]));
       setCameraOn(true);
       send({ type: "state", muted, cam: true });
       applySendParams();
-    } catch {
-      /* permission denied / no camera — stay audio-only */
+    } catch (e: any) {
+      // Don't fail silently — surface why the camera didn't start.
+      setCamNote(`Camera failed: ${e?.name || e?.message || "unknown error"}`);
     }
   }
 
@@ -565,7 +616,8 @@ export default function Room({
         }
       }
     }
-    setPreview(on ? new MediaStream([next]) : null);
+    // Always a fresh MediaStream: Safari only re-renders on identity change.
+    setPreview(new MediaStream([next]));
     applySendParams();
   }
 
@@ -744,6 +796,7 @@ export default function Room({
         <BoardActions id={id} name={title} />
         {joined && (
           <div className="ml-auto flex items-center gap-2">
+            {camNote && <span className="text-xs text-red-300">{camNote}</span>}
             <button
               className={`btn !py-1.5 text-xs ${muted ? "text-red-300" : ""}`}
               onClick={toggleMute}

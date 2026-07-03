@@ -116,3 +116,8 @@ gesture-unlocked `<video>`).
   participant, so upstream bandwidth grows with room size — fine for ~4–6 people,
   not a 50-person town hall. A bigger room would need an SFU (a media server that
   forwards streams), which this single-container app deliberately doesn't run.
+- **iOS capture rules.** iOS allows only ONE active getUserMedia session per
+  page: starting the camera must re-request a *combined* mic+camera stream and
+  swap the mic track everywhere (Room.tsx does this). Safari also won't render
+  tracks added to an already-playing srcObject — hand `<video>` a fresh
+  MediaStream (or re-assign srcObject) whenever tracks change.
