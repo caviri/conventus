@@ -56,12 +56,14 @@ export default function MobileTabBar() {
   ];
 
   return (
-    <nav className="surface flex border-t border-[var(--c-border)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:hidden">
+    // The home indicator floats over content, so the bar only reserves ~60% of
+    // the bottom inset — labels stay clear of it without a fat dead band.
+    <nav className="surface flex border-t border-[var(--c-border)] pb-[calc(env(safe-area-inset-bottom)*0.6)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:hidden">
       {tabs.map((t) => (
         <button
           key={t.key}
           onClick={t.onClick}
-          className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] transition ${
+          className={`flex flex-1 flex-col items-center gap-0.5 py-1.5 text-[10px] transition ${
             t.active ? "text-[var(--c-accent)]" : "text-[var(--c-muted)]"
           }`}
         >

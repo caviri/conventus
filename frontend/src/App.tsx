@@ -22,7 +22,7 @@ import { PromptHost } from "./components/PromptModal";
 import DropZone from "./components/DropZone";
 import MobileTabBar from "./components/MobileTabBar";
 import ConnectionBanner from "./components/ConnectionBanner";
-import { Menu } from "lucide-react";
+import FloatingMenu from "./components/FloatingMenu";
 
 export default function App() {
   const ready = useStore((s) => s.ready);
@@ -183,13 +183,7 @@ export default function App() {
       </div>
 
       <main className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
-        <button
-          className="btn absolute left-3 top-[calc(0.7rem+env(safe-area-inset-top))] z-10 !p-2 md:top-3 md:hidden"
-          onClick={() => setSidebarOpen(true)}
-          aria-label="Open menu"
-        >
-          <Menu size={18} />
-        </button>
+        <FloatingMenu onOpenSidebar={() => setSidebarOpen(true)} />
         {view.type === "channel" ||
         view.type === "dm" ||
         view.type === "conversation" ? (

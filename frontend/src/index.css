@@ -41,6 +41,14 @@ body,
 #root {
   height: 100%;
 }
+/* Dynamic viewport units track the *visible* screen exactly (iOS standalone
+   included), so the app reaches the true bottom edge with no dead band. */
+@supports (height: 100dvh) {
+  body,
+  #root {
+    height: 100dvh;
+  }
+}
 
 /* Paint the root element too: iOS Safari tints its status-bar / toolbar chrome
    and overscroll areas from <html>'s background — leaving it unset showed
