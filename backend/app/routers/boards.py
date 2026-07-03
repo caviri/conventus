@@ -178,11 +178,16 @@ async def append_document(board_id: int, req: AppendText, user=Depends(current_u
     return {"ok": True, "length": length}
 
 
+FEATURE_KINDS = ("pin", "path", "draw", "text", "image")
+
+
 class FeatureCreate(BaseModel):
-    kind: str  # pin | path
-    coords: list  # pin: [lng, lat]; path: [[lng, lat], …]
-    label: str = ""
+    kind: str  # pin | path | draw | text | image
+    coords: list  # point kinds: [lng, lat]; line kinds: [[lng, lat], …]
+    label: str = ""  # the content, for kind "text"
     color: str | None = None
+    size: float | None = None  # text font px / image width px / stroke px
+    url: str | None = None  # image source
 
 
 @router.post("/{board_id}/features")
@@ -191,16 +196,26 @@ async def create_feature(board_id: int, req: FeatureCreate, user=Depends(current
     board = _board_or_404(board_id)
     if board["kind"] != "map":
         raise HTTPException(status_code=400, detail="Not a map board")
-    if req.kind not in ("pin", "path"):
-        raise HTTPException(status_code=400, detail="kind must be 'pin' or 'path'")
+    if req.kind not in FEATURE_KINDS:
+        raise HTTPException(
+            status_code=400, detail=f"kind must be one of {', '.join(FEATURE_KINDS)}"
+        )
+    if req.kind == "image" and not req.url:
+        raise HTTPException(status_code=400, detail="image features need a url")
+    # Default to the author's member color so each user's marks are theirs.
+    author = db.query_one("SELECT color FROM users WHERE name = ?", (user["name"],))
     feature = {
         "id": uuid.uuid4().hex,
         "kind": req.kind,
         "coords": req.coords,
         "label": req.label,
-        "color": req.color or "#e8b24a",
+        "color": req.color or (author or {}).get("color") or "#e8b24a",
         "author": user["name"],
     }
+    if req.size:
+        feature["size"] = req.size
+    if req.url:
+        feature["url"] = req.url
     update = boardstate.add_map_feature(board["doc"], feature)
     await collab_hub.publish(board["doc"], update)
     return feature

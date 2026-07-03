@@ -251,9 +251,18 @@ pins and paths live in the board's Yjs doc, so they sync in real time exactly
 like whiteboard strokes, and they're readable/writable over the REST API too
 (bots can drop pins).
 
-- **Pins & paths** — a small tool rail: drop labeled pins, click-click-click a
-  path and double-click (or ✓) to finish. Click any annotation to relabel or
-  delete it. Everything carries its author's color.
+- **Pins & paths** — drop pins (labels pop up as bubbles showing the text and
+  its author) and click out paths whose **vertices stay visible**; a path's
+  writing floats at the shape's center. Click any annotation to relabel,
+  recolor, resize or delete it.
+- **Freehand drawing & story text** — sketch directly on the map with mouse or
+  finger (strokes are geo-anchored, so they stick to the terrain), and place
+  big story-style text like on Instagram. Both live in the same shared layer
+  set.
+- **Images, like a canvas** — upload a photo onto the map; drag it where it
+  belongs and resize it from its edit card.
+- **A layers menu** — every annotation listed with its author: hide/show any
+  of them just for you, zoom to one, or delete it for everyone.
 - **Live location, on your terms** — share where you are for **15 minutes, an
   hour, or until you stop**. Positions ride on Yjs *awareness*, which is
   ephemeral by design: your marker exists only while you're sharing and
@@ -262,12 +271,13 @@ like whiteboard strokes, and they're readable/writable over the REST API too
   that moves live.
 - **Base map** — vector tiles from [OpenFreeMap](https://openfreemap.org) by
   default (free, keyless; like the STUN default, it's the one external service
-  the feature leans on). Point `MAP_STYLE_URL` at your own MapLibre style to
-  stay fully self-contained, or override it just for yourself in
-  **Settings → Maps**. The MapLibre bundle is lazy-loaded only when a map
-  board opens.
+  the feature leans on). Pick **Liberty, Bright or Positron** right on the map,
+  point `MAP_STYLE_URL` at your own MapLibre style to stay fully
+  self-contained, or set a personal style URL in **Settings → Maps**. The
+  MapLibre bundle is lazy-loaded only when a map board opens.
 
 ![Live locations and shared annotations on a map board](img/map-live.png)
+![Drawing tools, story text, images and the layers menu](img/map-annotate.png)
 
 ### 🤖 Bots & automation
 - **Bots** — wire up any **OpenAI-compatible** endpoint and let an agent live in
@@ -583,7 +593,7 @@ Use the admin password in the same `"password"` field to get an **admin** token
 | `POST /api/boards/{id}/cards`    | Kanban: add a card `{text, col?, tags?, assignee?, due?, image?, link?}` |
 | `POST /api/boards/{id}/columns`  | Kanban: add a column `{title}`                |
 | `POST /api/boards/{id}/append`   | Live document: append `{text}`                |
-| `POST /api/boards/{id}/features` | Map: add an annotation `{kind: pin·path, coords, label?, color?}` — live viewers see it instantly |
+| `POST /api/boards/{id}/features` | Map: add an annotation `{kind: pin·path·draw·text·image, coords, label?, color?, size?, url?}` — live viewers see it instantly |
 | `POST /api/files`              | multipart `file=` → metadata                  |
 | `GET  /api/files`              | The Drive listing                             |
 | `GET  /api/files/{id}/raw`     | Stream a file (`?download=true` to download)  |

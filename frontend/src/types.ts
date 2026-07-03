@@ -176,13 +176,16 @@ export interface BingoCell {
 }
 
 // A shared annotation on a map board (stored in the board's Yjs doc).
+// pin/text/image sit at a point; path/draw are geo-anchored polylines.
 export interface MapFeature {
   id: string;
-  kind: "pin" | "path";
-  coords: number[] | number[][]; // pin: [lng, lat]; path: [[lng, lat], …]
-  label: string;
+  kind: "pin" | "path" | "draw" | "text" | "image";
+  coords: number[] | number[][]; // point: [lng, lat]; line: [[lng, lat], …]
+  label: string; // pin/path/draw label; the text content for kind "text"
   color: string;
   author: string;
+  size?: number; // text font px · image width px · draw stroke px
+  url?: string; // image source (an uploaded file's URL)
 }
 
 export type View =
