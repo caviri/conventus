@@ -29,7 +29,9 @@ import {
   Lock,
   Unlock,
   Dices,
+  Map as MapIcon,
 } from "lucide-react";
+import { getMapStyleOverride, saveMapStyleOverride } from "../mapstyle";
 
 // Every preset ships a dark and a light variant. The same palettes live as
 // readable CSS files in the repo's themes/ folder.
@@ -381,6 +383,23 @@ export default function Settings() {
             >
               {notif ? "Notifications enabled ✓" : "Enable notifications"}
             </button>
+          </section>
+
+          <section className="card p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <MapIcon size={16} className="text-[var(--c-accent)]" />
+              <h2 className="font-semibold">Maps</h2>
+            </div>
+            <p className="mb-3 text-sm text-[var(--c-muted)]">
+              Base-map style for map boards (a MapLibre style JSON URL). Leave
+              empty to use the room's default. Stored only in your browser.
+            </p>
+            <input
+              className="input"
+              placeholder="Room default (set MAP_STYLE_URL on the server to change it)"
+              defaultValue={getMapStyleOverride()}
+              onBlur={(e) => saveMapStyleOverride(e.target.value)}
+            />
           </section>
 
           <section className="card p-4">

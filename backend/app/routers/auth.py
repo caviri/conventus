@@ -147,4 +147,5 @@ async def public_config():
         "room_name": config.ROOM_NAME,
         "version": "0.1.0",
         "ice_servers": config.ice_servers(),
+        "map_style_url": config.MAP_STYLE_URL,
     }

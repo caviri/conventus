@@ -64,6 +64,24 @@ def read_canvas(doc_name: str) -> dict[str, Any]:
     return {"text": text}
 
 
+def read_map(doc_name: str) -> dict[str, Any]:
+    """A map board's shared annotations (pins and paths), as stored by the UI."""
+    doc = _load(doc_name)
+    features = []
+    for f in doc.get("features", type=Array):
+        features.append(f.to_py() if hasattr(f, "to_py") else f)
+    return {"features": features}
+
+
+def add_map_feature(doc_name: str, feature: dict[str, Any]) -> bytes:
+    """Append an annotation to a map board; returns the update to broadcast."""
+
+    def fn(doc: Doc) -> None:
+        doc.get("features", type=Array).append(dict(feature))
+
+    return _mutate(doc_name, fn)
+
+
 def read_game_setup(doc_name: str) -> dict[str, Any]:
     """A game board's collaborative setup draft: free text + an options map."""
     doc = _load(doc_name)

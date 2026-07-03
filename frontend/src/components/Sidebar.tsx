@@ -25,6 +25,7 @@ import {
   Sparkles,
   Radio,
   Dices,
+  Map as MapIcon,
 } from "lucide-react";
 
 const BOARD_KIND = {
@@ -33,6 +34,7 @@ const BOARD_KIND = {
   kanban: { label: "kanban", icon: Columns3 },
   room: { label: "call room", icon: Radio },
   game: { label: "game", icon: Dices },
+  map: { label: "map", icon: MapIcon },
 } as const;
 
 function boardIcon(kind: BoardKind, size = 16) {
@@ -312,6 +314,12 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
                   onClick={() => createBoard("game")}
                 >
                   <Dices size={15} /> New game (bingo)
+                </button>
+                <button
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--c-elevated)]"
+                  onClick={() => createBoard("map")}
+                >
+                  <MapIcon size={15} /> New map
                 </button>
                 <div className="my-1 border-t border-[var(--c-border)]" />
                 <button

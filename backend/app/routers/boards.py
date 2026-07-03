@@ -4,6 +4,8 @@ Each board maps to a Yjs collab document id of the form ``{kind}-{id}``.
 """
 from __future__ import annotations
 
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -16,7 +18,7 @@ from ..ws import hub
 router = APIRouter(prefix="/api/boards", tags=["boards"])
 
 
-BOARD_KINDS = ("canvas", "whiteboard", "kanban", "room", "game")
+BOARD_KINDS = ("canvas", "whiteboard", "kanban", "room", "game", "map")
 
 
 class BoardCreate(BaseModel):
@@ -131,14 +133,18 @@ def _board_or_404(board_id: int) -> dict:
 
 @router.get("/{board_id}/content")
 async def board_content(board_id: int, user=Depends(current_user)):
-    """Structured contents of a board: kanban → columns + cards; live document → text."""
+    """Structured contents of a board: kanban → columns + cards; live document →
+    text; map → annotation features."""
     board = _board_or_404(board_id)
     if board["kind"] == "kanban":
         return boardstate.read_kanban(board["doc"])
     if board["kind"] == "canvas":
         return boardstate.read_canvas(board["doc"])
+    if board["kind"] == "map":
+        return boardstate.read_map(board["doc"])
     raise HTTPException(
-        status_code=400, detail="Content API supports kanban and live-document boards"
+        status_code=400,
+        detail="Content API supports kanban, live-document and map boards",
     )
 
 
@@ -170,3 +176,31 @@ async def append_document(board_id: int, req: AppendText, user=Depends(current_u
     update, length = boardstate.append_text(board["doc"], req.text)
     await collab_hub.publish(board["doc"], update)
     return {"ok": True, "length": length}
+
+
+class FeatureCreate(BaseModel):
+    kind: str  # pin | path
+    coords: list  # pin: [lng, lat]; path: [[lng, lat], …]
+    label: str = ""
+    color: str | None = None
+
+
+@router.post("/{board_id}/features")
+async def create_feature(board_id: int, req: FeatureCreate, user=Depends(current_user)):
+    """Drop an annotation on a map board — live viewers see it immediately."""
+    board = _board_or_404(board_id)
+    if board["kind"] != "map":
+        raise HTTPException(status_code=400, detail="Not a map board")
+    if req.kind not in ("pin", "path"):
+        raise HTTPException(status_code=400, detail="kind must be 'pin' or 'path'")
+    feature = {
+        "id": uuid.uuid4().hex,
+        "kind": req.kind,
+        "coords": req.coords,
+        "label": req.label,
+        "color": req.color or "#e8b24a",
+        "author": user["name"],
+    }
+    update = boardstate.add_map_feature(board["doc"], feature)
+    await collab_hub.publish(board["doc"], update)
+    return feature

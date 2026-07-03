@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useStore } from "./store";
 import { connectWs, disconnectWs } from "./ws";
 import { loadCustomCss } from "./customcss";
@@ -14,6 +14,8 @@ import Whiteboard from "./components/Whiteboard";
 import Kanban from "./components/Kanban";
 import Room from "./components/Room";
 import Game from "./components/Game";
+// MapLibre is by far the heaviest dependency — load it only when a map opens.
+const MapBoard = lazy(() => import("./components/MapBoard"));
 import Settings from "./components/Settings";
 import AdminPanel from "./components/AdminPanel";
 import Search from "./components/Search";
@@ -157,7 +159,8 @@ export default function App() {
     view.type === "whiteboard" ||
     view.type === "kanban" ||
     view.type === "room" ||
-    view.type === "game"
+    view.type === "game" ||
+    view.type === "map"
       ? boards.find((b) => b.id === view.id)
       : undefined;
 
@@ -215,6 +218,18 @@ export default function App() {
           )
         ) : view.type === "game" ? (
           board && <Game key={board.doc} board={board} />
+        ) : view.type === "map" ? (
+          board && (
+            <Suspense
+              fallback={
+                <div className="flex h-full items-center justify-center text-[var(--c-muted)]">
+                  Loading map…
+                </div>
+              }
+            >
+              <MapBoard key={board.doc} board={board} />
+            </Suspense>
+          )
         ) : view.type === "settings" ? (
           <Settings />
         ) : (

@@ -173,9 +173,9 @@ audio/video open in a modal without leaving the room.
 ### 📝 Real-time collaboration (Yjs CRDT)
 Boards live right under the channels list; the **+** next to *Channels* opens a
 menu to spin up a **folder** (to organize them — drag channels and boards into
-collapsible folders, shared across the room) or any of **five** board kinds.
-Three are collaborative CRDT surfaces; the others are a live **call room** and a
-**game board** (each in its own section below):
+collapsible folders, shared across the room) or any of **six** board kinds.
+Three are collaborative CRDT surfaces; the others are a live **call room**, a
+**game board**, and a shared **map** (each in its own section below):
 - **Live documents** — shared markdown scratchpads with live preview,
   **multiple named** boards, **live remote cursors**, and one-click
   **download as Markdown or PDF**.
@@ -244,6 +244,30 @@ cursors) before the host opens play.
 
 ![Drafting the bingo word list together — a shared, live document](img/game-setup.png)
 ![A live bingo card, dealt per player](img/game-live.png)
+
+### 🗺️ Map boards
+A shared map (**MapLibre GL** under the hood) the whole room annotates together —
+pins and paths live in the board's Yjs doc, so they sync in real time exactly
+like whiteboard strokes, and they're readable/writable over the REST API too
+(bots can drop pins).
+
+- **Pins & paths** — a small tool rail: drop labeled pins, click-click-click a
+  path and double-click (or ✓) to finish. Click any annotation to relabel or
+  delete it. Everything carries its author's color.
+- **Live location, on your terms** — share where you are for **15 minutes, an
+  hour, or until you stop**. Positions ride on Yjs *awareness*, which is
+  ephemeral by design: your marker exists only while you're sharing and
+  vanishes the moment you stop, close the page, or the timer runs out —
+  nothing is ever stored. Everyone sharing appears as a named, colored marker
+  that moves live.
+- **Base map** — vector tiles from [OpenFreeMap](https://openfreemap.org) by
+  default (free, keyless; like the STUN default, it's the one external service
+  the feature leans on). Point `MAP_STYLE_URL` at your own MapLibre style to
+  stay fully self-contained, or override it just for yourself in
+  **Settings → Maps**. The MapLibre bundle is lazy-loaded only when a map
+  board opens.
+
+![Live locations and shared annotations on a map board](img/map-live.png)
 
 ### 🤖 Bots & automation
 - **Bots** — wire up any **OpenAI-compatible** endpoint and let an agent live in
@@ -473,6 +497,7 @@ docker compose up --build
 | `ROOM_NAME`     | `Conventus` | Branding in the UI                       |
 | `MAX_UPLOAD_MB` | `100`       | Per-file upload limit                    |
 | `DATA_DIR`      | `/data`     | DB + uploads location                    |
+| `MAP_STYLE_URL` | OpenFreeMap | MapLibre style JSON for map boards (self-host to stay fully contained) |
 | `STUN_URLS`     | Google STUN | Comma-separated STUN URLs for call rooms |
 | `TURN_URLS`     | _(none)_    | Comma-separated TURN URLs (for strict/symmetric NATs) |
 | `TURN_USERNAME` | _(none)_    | TURN credential username                 |
@@ -550,14 +575,15 @@ Use the admin password in the same `"password"` field to get an **admin** token
 | `POST /api/members/status`     | `{status}`                                    |
 | `POST /api/members/avatar`     | `{avatar}` (emoji or URL)                     |
 | `GET  /api/search?q=`          | Search channels + your DMs                    |
-| `GET  /api/boards`             | List boards (live documents, whiteboards, kanban, call rooms, games) |
-| `POST /api/boards`             | `{kind, name, game_type?}` (`canvas`/`whiteboard`/`kanban`/`room`/`game`) |
+| `GET  /api/boards`             | List boards (live documents, whiteboards, kanban, call rooms, games, maps) |
+| `POST /api/boards`             | `{kind, name, game_type?}` (`canvas`/`whiteboard`/`kanban`/`room`/`game`/`map`) |
 | `PATCH /api/boards/{id}`       | `{name}`                                       |
 | `DELETE /api/boards/{id}` 🔒   | Removes the board + its collab log            |
-| `GET  /api/boards/{id}/content`  | Kanban → `{columns, cards}`; live document → `{text}` |
+| `GET  /api/boards/{id}/content`  | Kanban → `{columns, cards}`; live document → `{text}`; map → `{features}` |
 | `POST /api/boards/{id}/cards`    | Kanban: add a card `{text, col?, tags?, assignee?, due?, image?, link?}` |
 | `POST /api/boards/{id}/columns`  | Kanban: add a column `{title}`                |
 | `POST /api/boards/{id}/append`   | Live document: append `{text}`                |
+| `POST /api/boards/{id}/features` | Map: add an annotation `{kind: pin·path, coords, label?, color?}` — live viewers see it instantly |
 | `POST /api/files`              | multipart `file=` → metadata                  |
 | `GET  /api/files`              | The Drive listing                             |
 | `GET  /api/files/{id}/raw`     | Stream a file (`?download=true` to download)  |

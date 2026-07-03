@@ -75,6 +75,13 @@ AGENT_NAME: str = _env("AGENT_NAME", "")
 #   STUN_URLS  — comma-separated stun: URLs (default: Google's public STUN)
 #   TURN_URLS  — comma-separated turn:/turns: URLs (empty = no TURN)
 #   TURN_USERNAME / TURN_PASSWORD — credentials for the TURN server
+# Base-map style for map boards (a MapLibre style JSON URL). The default is
+# OpenFreeMap's free, keyless vector style — like the STUN default, it's the
+# one external service the feature leans on out of the box; point it at your
+# own tile server to stay fully self-contained. Users can also override it
+# per-browser in Settings.
+MAP_STYLE_URL: str = _env("MAP_STYLE_URL", "https://tiles.openfreemap.org/styles/liberty")
+
 STUN_URLS: str = _env("STUN_URLS", "stun:stun.l.google.com:19302")
 TURN_URLS: str = _env("TURN_URLS", "")
 TURN_USERNAME: str = _env("TURN_USERNAME", "")

@@ -142,7 +142,7 @@ export interface SearchResult extends Message {
   location: SearchLocation;
 }
 
-export type BoardKind = "canvas" | "whiteboard" | "kanban" | "room" | "game";
+export type BoardKind = "canvas" | "whiteboard" | "kanban" | "room" | "game" | "map";
 
 export interface Board {
   id: number;
@@ -175,6 +175,16 @@ export interface BingoCell {
   free: boolean;
 }
 
+// A shared annotation on a map board (stored in the board's Yjs doc).
+export interface MapFeature {
+  id: string;
+  kind: "pin" | "path";
+  coords: number[] | number[][]; // pin: [lng, lat]; path: [[lng, lat], …]
+  label: string;
+  color: string;
+  author: string;
+}
+
 export type View =
   | { type: "channel"; id: number }
   | { type: "dm"; id: number }
@@ -185,5 +195,6 @@ export type View =
   | { type: "kanban"; id: number }
   | { type: "room"; id: number }
   | { type: "game"; id: number }
+  | { type: "map"; id: number }
   | { type: "settings" }
   | { type: "admin" };
