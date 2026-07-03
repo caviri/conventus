@@ -15,7 +15,7 @@ from typing import Any, AsyncIterator, Callable, Optional
 
 import httpx
 
-from . import db, messaging, previews
+from . import db, messaging, previews, security
 from .ws import hub
 
 CONTEXT_LIMIT = 20
@@ -106,8 +106,9 @@ async def complete(
     """Non-streaming completion → the full assistant message text."""
     cfg = config if config is not None else get_config()
     headers = {"Content-Type": "application/json"}
-    if cfg.get("api_key"):
-        headers["Authorization"] = f"Bearer {cfg['api_key']}"
+    api_key = security.resolve_secret(cfg.get("api_key"))
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
     payload: dict[str, Any] = {
         "model": cfg["model"],
         "messages": messages,
@@ -164,7 +165,7 @@ async def stream_reply(
     try:
         async for delta in stream_chat(
             config["base_url"],
-            config["api_key"],
+            security.resolve_secret(config.get("api_key")),
             config["model"],
             messages,
             max_tokens=reasoning_budget(config),

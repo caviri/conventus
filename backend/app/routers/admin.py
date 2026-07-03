@@ -61,10 +61,20 @@ async def remove_member(name: str, user=Depends(require_admin)):
 
 
 @router.post("/export")
-async def export_room(user=Depends(require_admin)):
+async def export_room(include_secrets: bool = False, user=Depends(require_admin)):
+    """Bundle the room into a zip. Bot API keys are stripped by default — pass
+    ``?include_secrets=true`` for a full backup whose zip then contains usable
+    plaintext credentials (guard it accordingly). ``env:`` references are kept
+    either way; they're pointers, not secrets."""
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         dump = {table: db.query_all(f"SELECT * FROM {table}") for table in TABLES}
+        for bot in dump["bots"]:
+            key = bot.get("api_key") or ""
+            if key.startswith(security.ENV_PREFIX):
+                continue  # a pointer to an env var — safe and useful to keep
+            # Decrypt for portability (a new deploy has a different SECRET_KEY).
+            bot["api_key"] = security.resolve_secret(key) if include_secrets else ""
         zf.writestr("conventus.json", json.dumps(dump, ensure_ascii=False, indent=2))
         for f in dump["files"]:
             path = config.FILES_DIR / f["id"]
@@ -84,6 +94,19 @@ async def import_room(file: UploadFile = File(...), user=Depends(require_admin))
     try:
         with zipfile.ZipFile(io.BytesIO(raw)) as zf:
             dump = json.loads(zf.read("conventus.json"))
+            # Exports strip bot keys by default; keep the keys this room
+            # already has for same-named bots instead of blanking them.
+            prior_keys = {
+                b["name"]: b["api_key"]
+                for b in db.query_all("SELECT name, api_key FROM bots")
+                if b["api_key"]
+            }
+            for bot in dump.get("bots", []):
+                key = bot.get("api_key") or ""
+                if not key:
+                    bot["api_key"] = prior_keys.get(bot.get("name"), "")
+                else:
+                    bot["api_key"] = security.seal_secret(key)
             # Wipe current room.
             for table in TABLES:
                 db.execute(f"DELETE FROM {table}")

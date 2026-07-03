@@ -244,6 +244,11 @@ cursors) before the host opens play.
   avatars, editable from the admin panel.
 - **Automation API** — the same password-protected REST API powers bots,
   scripts, and scheduled posts.
+- **Key handling** — bot API keys are write-only over the API, **encrypted at
+  rest** (when `SECRET_KEY` is pinned), and stripped from room exports unless
+  you explicitly ask for a full backup. An `api_key` of `env:VAR_NAME` reads
+  the key from an environment variable at call time, so the secret never
+  touches the database at all.
 
 ![Editing a bot in the admin panel](img/bot-edit.png)
 
@@ -457,7 +462,7 @@ docker compose up --build
 | --------------- | ----------- | ---------------------------------------- |
 | `ROOM_PASSWORD` | `conventus` | Shared password to enter the room        |
 | `ADMIN_PASSWORD`| `admin`     | Unlocks the admin panel                  |
-| `SECRET_KEY`    | random      | Signs session tokens (pin for stability) |
+| `SECRET_KEY`    | random      | Signs session tokens **and encrypts stored bot API keys** — pin it for stable sessions and at-rest key encryption |
 | `ROOM_NAME`     | `Conventus` | Branding in the UI                       |
 | `MAX_UPLOAD_MB` | `100`       | Per-file upload limit                    |
 | `DATA_DIR`      | `/data`     | DB + uploads location                    |
@@ -567,8 +572,8 @@ Use the admin password in the same `"password"` field to get an **admin** token
 
 | Method & path                  | Body / notes                                  |
 | ------------------------------ | --------------------------------------------- |
-| `GET  /api/bots`               | List bots (keys masked)                       |
-| `POST /api/bots` 🔒            | `{name, base_url, api_key?, model, system_prompt?, trigger, channels?, avatar?}` |
+| `GET  /api/bots`               | List bots (keys masked; `env:` refs shown)    |
+| `POST /api/bots` 🔒            | `{name, base_url, api_key?, model, system_prompt?, trigger, channels?, avatar?}` — `api_key` may be `env:VAR_NAME` to read it from the environment at call time |
 | `PATCH /api/bots/{id}` 🔒      | Any of the above (blank `api_key` keeps it)   |
 | `DELETE /api/bots/{id}` 🔒     | Delete a bot                                  |
 | `GET  /api/push/config`        | VAPID public key (no auth)                    |
@@ -576,8 +581,8 @@ Use the admin password in the same `"password"` field to get an **admin** token
 | `POST /api/push/unsubscribe`   | `{endpoint}`                                  |
 | `POST /api/admin/reserve` 🔒   | `{name, password, is_admin?}`                 |
 | `DELETE /api/admin/members/{name}` 🔒 | Remove a member                        |
-| `POST /api/admin/export` 🔒    | Download the room as a zip                    |
-| `POST /api/admin/import` 🔒    | multipart `file=` (a previous export)         |
+| `POST /api/admin/export` 🔒    | Download the room as a zip. Bot API keys are **stripped by default**; add `?include_secrets=true` for a full backup (the zip then holds usable plaintext keys — guard it) |
+| `POST /api/admin/import` 🔒    | multipart `file=` (a previous export). Bots imported without keys keep the keys this room already has |
 
 > 🔒 = requires an admin token. The same token authorizes the realtime
 > `/ws?token=…` (presence + messages), `/collab/{doc}?token=…` (Yjs), and

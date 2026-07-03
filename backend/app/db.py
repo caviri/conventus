@@ -12,7 +12,7 @@ import threading
 import time
 from typing import Any, Iterable, Optional
 
-from . import config
+from . import config, security
 
 _lock = threading.RLock()
 _conn: Optional[sqlite3.Connection] = None
@@ -242,6 +242,16 @@ def init() -> None:
         # Fold any such boards into the generic games shape.
         conn.execute("UPDATE boards SET kind = 'game' WHERE kind = 'bingo'")
         conn.execute("DROP TABLE IF EXISTS bingo_games")
+        # Encrypt any bot API keys still stored in plaintext (rooms created
+        # before at-rest sealing, or booted without a pinned SECRET_KEY).
+        if config.SECRET_KEY_SET:
+            for row in conn.execute("SELECT id, api_key FROM bots").fetchall():
+                key = row["api_key"] or ""
+                if key and not key.startswith((security.ENC_PREFIX, security.ENV_PREFIX)):
+                    conn.execute(
+                        "UPDATE bots SET api_key = ? WHERE id = ?",
+                        (security.seal_secret(key), row["id"]),
+                    )
         existing = conn.execute("SELECT COUNT(*) AS n FROM channels").fetchone()["n"]
         if existing == 0:
             conn.execute(
@@ -281,9 +291,9 @@ def init() -> None:
                     "system_prompt, trigger, channels, color, avatar, enabled, "
                     "is_assistant, created_at) "
                     "VALUES (?, ?, ?, ?, ?, ?, 'mention', '[]', ?, ?, ?, 1, ?)",
-                    (name, old["base_url"], old["api_key"], old["model"],
-                     old["model_type"], old["system_prompt"], old["color"],
-                     old["avatar"], old["enabled"], now),
+                    (name, old["base_url"], security.seal_secret(old["api_key"]),
+                     old["model"], old["model_type"], old["system_prompt"],
+                     old["color"], old["avatar"], old["enabled"], now),
                 )
             else:
                 conn.execute(
@@ -306,7 +316,7 @@ def init() -> None:
         if config.AGENT_ENDPOINT and config.AGENT_TOKEN:
             conn.execute(
                 "UPDATE bots SET base_url = ?, api_key = ?, enabled = 1 WHERE is_assistant = 1",
-                (config.AGENT_ENDPOINT, config.AGENT_TOKEN),
+                (config.AGENT_ENDPOINT, security.seal_secret(config.AGENT_TOKEN)),
             )
             if config.AGENT_NAME and conn.execute(
                 "SELECT 1 FROM bots WHERE name = ? AND is_assistant = 0", (config.AGENT_NAME,)

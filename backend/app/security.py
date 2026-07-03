@@ -1,13 +1,17 @@
-"""Password hashing and stateless session tokens.
+"""Password hashing, stateless session tokens, and stored-secret sealing.
 
-We keep dependencies tiny: PBKDF2 from the stdlib for per-user passwords, and
-itsdangerous for signed, expiring session tokens. No server-side session store
-is needed, which keeps the whole thing single-container friendly.
+We keep dependencies tiny: PBKDF2 from the stdlib for per-user passwords,
+itsdangerous for signed, expiring session tokens, and Fernet (from
+``cryptography``, already required by webpush) to encrypt bot API keys at
+rest. No server-side session store is needed, which keeps the whole thing
+single-container friendly.
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
+import os
 import secrets
 from typing import Any, Optional
 
@@ -41,6 +45,51 @@ def verify_password(password: str, stored: Optional[str]) -> bool:
 
 def constant_time_equals(a: str, b: str) -> bool:
     return hmac.compare_digest(a.encode(), b.encode())
+
+
+# --- stored secrets (bot API keys) ----------------------------------------
+# Secrets in the database carry a prefix telling how to resolve them:
+#   enc:…   Fernet ciphertext, keyed off SECRET_KEY (only when it's pinned —
+#           a per-boot random key would orphan the ciphertext on restart)
+#   env:X   a pointer to environment variable X, resolved at call time —
+#           the secret itself never touches the database or exports
+# Anything else is legacy plaintext, still honored (and upgraded on startup
+# when SECRET_KEY is set).
+
+ENC_PREFIX = "enc:"
+ENV_PREFIX = "env:"
+
+
+def _fernet():
+    from cryptography.fernet import Fernet
+
+    digest = hashlib.sha256(f"conventus-secrets:{config.SECRET_KEY}".encode()).digest()
+    return Fernet(base64.urlsafe_b64encode(digest))
+
+
+def seal_secret(value: str) -> str:
+    """Prepare a secret for storage: encrypt when possible, pass refs through."""
+    value = (value or "").strip()
+    if not value or value.startswith((ENC_PREFIX, ENV_PREFIX)):
+        return value
+    if not config.SECRET_KEY_SET:
+        return value  # no stable key to encrypt under — stored as-is
+    return ENC_PREFIX + _fernet().encrypt(value.encode()).decode()
+
+
+def resolve_secret(value: Optional[str]) -> str:
+    """Stored form → usable plaintext, at call time."""
+    value = (value or "").strip()
+    if not value:
+        return ""
+    if value.startswith(ENV_PREFIX):
+        return os.environ.get(value[len(ENV_PREFIX):].strip(), "").strip()
+    if value.startswith(ENC_PREFIX):
+        try:
+            return _fernet().decrypt(value[len(ENC_PREFIX):].encode()).decode()
+        except Exception:  # wrong or rotated SECRET_KEY
+            return ""
+    return value
 
 
 def make_token(name: str, is_admin: bool) -> str:

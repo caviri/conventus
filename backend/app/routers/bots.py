@@ -2,13 +2,16 @@
 
 Bots are OpenAI-compatible chat endpoints that participate in channels. The
 api_key is write-only from the client's perspective: we never send it back.
+Keys are sealed before storage (encrypted under SECRET_KEY when it's pinned);
+an ``env:NAME`` value stores a pointer to an environment variable instead of a
+secret, so it's shown back verbatim.
 """
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import db
+from .. import db, security
 from ..deps import current_user, require_admin
 from ..routers.auth import color_for
 from ..ws import hub
@@ -42,12 +45,19 @@ class BotUpdate(BaseModel):
     enabled: bool | None = None
 
 
-def _serialize(row: dict, *, reveal_key: bool = False) -> dict:
+def _masked_key(stored: str) -> str:
+    if not stored:
+        return ""
+    # env: pointers aren't secrets — showing them lets admins see the wiring.
+    return stored if stored.startswith(security.ENV_PREFIX) else "•••"
+
+
+def _serialize(row: dict) -> dict:
     return {
         "id": row["id"],
         "name": row["name"],
         "base_url": row["base_url"],
-        "api_key": row["api_key"] if reveal_key else ("•••" if row["api_key"] else ""),
+        "api_key": _masked_key(row["api_key"]),
         "model": row["model"],
         "model_type": row["model_type"],
         "system_prompt": row["system_prompt"],
@@ -82,7 +92,7 @@ async def create_bot(req: BotCreate, user=Depends(require_admin)):
         (
             req.name,
             req.base_url,
-            req.api_key,
+            security.seal_secret(req.api_key),
             req.model,
             req.model_type,
             req.system_prompt,
@@ -115,7 +125,7 @@ async def update_bot(bot_id: int, req: BotUpdate, user=Depends(require_admin)):
     if req.avatar is not None:
         fields["avatar"] = req.avatar
     if req.api_key is not None and req.api_key != "•••":
-        fields["api_key"] = req.api_key
+        fields["api_key"] = security.seal_secret(req.api_key)
     if req.channels is not None:
         fields["channels"] = db.dumps(req.channels)
     if req.enabled is not None:

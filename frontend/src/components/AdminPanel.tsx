@@ -190,7 +190,14 @@ function BotsTab() {
               <input className="input" value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })} />
             </Field>
             <Field label="API key">
-              <input className="input" type="password" value={form.api_key} onChange={(e) => setForm({ ...form, api_key: e.target.value })} />
+              <input
+                className="input"
+                type="password"
+                value={form.api_key}
+                placeholder="sk-… or env:VAR_NAME"
+                title="Stored encrypted. Use env:VAR_NAME to read the key from an environment variable instead (never stored)."
+                onChange={(e) => setForm({ ...form, api_key: e.target.value })}
+              />
             </Field>
           </div>
           <Field label="System prompt">
@@ -297,7 +304,7 @@ function BotsTab() {
                     <input className="input" value={editForm.base_url} onChange={(e) => setEditForm({ ...editForm, base_url: e.target.value })} />
                   </Field>
                   <Field label="API key (leave blank to keep)">
-                    <input className="input" type="password" value={editForm.api_key} placeholder="••••••" onChange={(e) => setEditForm({ ...editForm, api_key: e.target.value })} />
+                    <input className="input" type="password" value={editForm.api_key} placeholder="•••••• (or env:VAR_NAME)" title="Stored encrypted. Use env:VAR_NAME to read the key from an environment variable instead (never stored)." onChange={(e) => setEditForm({ ...editForm, api_key: e.target.value })} />
                   </Field>
                 </div>
                 <Field label="System prompt">

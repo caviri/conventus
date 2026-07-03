@@ -30,8 +30,10 @@ ROOM_PASSWORD: str = _env("ROOM_PASSWORD", "conventus")
 # exporting/importing the room).
 ADMIN_PASSWORD: str = _env("ADMIN_PASSWORD", "admin")
 
-# Used to sign session tokens. If you don't pin it, sessions reset on restart —
-# which is usually fine for an ephemeral room, but set it for stability.
+# Used to sign session tokens and to encrypt stored bot API keys. If you don't
+# pin it, sessions reset on restart — which is usually fine for an ephemeral
+# room, but set it for stability (and to enable at-rest key encryption).
+SECRET_KEY_SET: bool = bool(os.environ.get("SECRET_KEY", "").strip())
 SECRET_KEY: str = _env("SECRET_KEY", secrets.token_hex(32))
 
 # Where the SQLite db and uploaded files live. On Hugging Face Spaces with
