@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useRef, useState } from "react";
 import { api } from "../api";
 import { useStore } from "../store";
 import type { User } from "../types";
@@ -8,16 +8,13 @@ export default function Login() {
   const roomName = useStore((s) => s.roomName);
   const login = useStore((s) => s.login);
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
+  // Lazy init so the remembered name is there on the very first paint —
+  // filling it in from an effect made the input blink from empty to filled.
+  const [name, setName] = useState(() => localStorage.getItem("conventus.name") || "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const saved = localStorage.getItem("conventus.name");
-    if (saved) setName(saved);
-  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -73,6 +70,8 @@ export default function Login() {
         <label className="mb-1 block text-xs font-medium text-[var(--c-muted)]">
           Name
         </label>
+        {/* No autofocus: popping the keyboard (and iOS's focus zoom) the moment
+            the page opens is jarring on phones — let people tap in themselves. */}
         <input
           ref={nameRef}
           className="input mb-3"
@@ -80,7 +79,6 @@ export default function Login() {
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. ada"
           autoComplete="nickname"
-          autoFocus
         />
 
         <label className="mb-1 block text-xs font-medium text-[var(--c-muted)]">

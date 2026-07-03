@@ -683,6 +683,23 @@ export default function MapBoard({ board }: { board: Board }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
 
+  // On phones the on-screen keyboard overlays the page; track how much of the
+  // viewport it eats so the annotation editor floats above it, not under it.
+  const [kbOffset, setKbOffset] = useState(0);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onChange = () =>
+      setKbOffset(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
+    vv.addEventListener("resize", onChange);
+    vv.addEventListener("scroll", onChange);
+    onChange();
+    return () => {
+      vv.removeEventListener("resize", onChange);
+      vv.removeEventListener("scroll", onChange);
+    };
+  }, []);
+
   function toggleHidden(id: string) {
     setHidden((prev) => {
       const next = new Set(prev);
@@ -983,7 +1000,7 @@ export default function MapBoard({ board }: { board: Board }) {
         {selectedFeature && (
           <div
             className="card absolute left-1/2 z-30 flex w-80 max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col gap-2 p-3 shadow-2xl fade-in"
-            style={{ bottom: "calc(1rem + env(safe-area-inset-bottom))" }}
+            style={{ bottom: `calc(1rem + env(safe-area-inset-bottom) + ${kbOffset}px)` }}
           >
             <div className="flex items-center gap-2 text-xs text-[var(--c-muted)]">
               <span

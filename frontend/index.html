@@ -11,6 +11,16 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Conventus" />
+    <!-- Fonts load from the <head>, in parallel with the app bundle. As a CSS
+         @import they loaded serially after the stylesheet parsed, which left a
+         long window where the login painted in fallback fonts and then
+         "blinked" into Fraunces/Nunito. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Nunito:wght@400;500;600;700;800&display=swap"
+    />
     <title>Conventus</title>
   </head>
   <body>

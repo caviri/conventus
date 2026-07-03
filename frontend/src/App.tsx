@@ -1,8 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useStore } from "./store";
 import { connectWs, disconnectWs } from "./ws";
-import { loadCustomCss } from "./customcss";
-import { loadTheme } from "./theme";
 import { notificationsEnabled } from "./notifications";
 import { subscribeToPush } from "./push";
 import Login from "./components/Login";
@@ -61,8 +59,6 @@ export default function App() {
   }, [user, setView]);
 
   useEffect(() => {
-    loadTheme();
-    loadCustomCss();
     bootstrap();
   }, [bootstrap]);
 
