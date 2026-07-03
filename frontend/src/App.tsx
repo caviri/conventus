@@ -167,15 +167,17 @@ export default function App() {
       <PromptHost />
       <DropZone />
       <ConnectionBanner />
-      {/* Mobile backdrop */}
+      {/* Mobile backdrop. The drawer sits above every board's own chrome
+          (map/room popovers go up to z-40) but below the full-screen overlays
+          (Search z-50, lightbox/prompts z-60). */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-20 bg-black/50 md:hidden"
+          className="fixed inset-0 z-[44] bg-black/50 md:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
       <div
-        className={`fixed z-30 h-full transition-transform md:static md:translate-x-0 ${
+        className={`fixed z-[45] h-full transition-transform md:static md:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >

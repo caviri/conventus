@@ -124,6 +124,18 @@ async def import_room(file: UploadFile = File(...), user=Depends(require_admin))
                 if name.startswith("files/") and not name.endswith("/"):
                     file_id = name.split("/", 1)[1]
                     (config.FILES_DIR / file_id).write_bytes(zf.read(name))
+            # The room must always keep a main channel, whatever the export held.
+            if not db.query_one("SELECT 1 FROM channels LIMIT 1"):
+                db.execute(
+                    "INSERT INTO channels(name, topic, is_default, created_at) "
+                    "VALUES ('general', 'Welcome to Conventus 👋', 1, ?)",
+                    (db.now(),),
+                )
+            elif not db.query_one("SELECT 1 FROM channels WHERE is_default = 1"):
+                db.execute(
+                    "UPDATE channels SET is_default = 1 "
+                    "WHERE id = (SELECT MIN(id) FROM channels)"
+                )
     except (zipfile.BadZipFile, KeyError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=400, detail=f"Invalid export file: {exc}")
 

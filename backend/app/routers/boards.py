@@ -9,7 +9,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .. import boardstate, db
+from .. import boardstate, db, messaging
 from ..collab import hub as collab_hub
 from ..deps import current_user, require_admin
 from ..games import GAME_TYPES
@@ -19,6 +19,16 @@ router = APIRouter(prefix="/api/boards", tags=["boards"])
 
 
 BOARD_KINDS = ("canvas", "whiteboard", "kanban", "room", "game", "map")
+
+# How each kind introduces itself in the main channel when created.
+KIND_ANNOUNCE = {
+    "canvas": ("📝", "live document"),
+    "whiteboard": ("🎨", "whiteboard"),
+    "kanban": ("📋", "kanban board"),
+    "room": ("🎙️", "call room"),
+    "game": ("🎲", "game"),
+    "map": ("🗺️", "map"),
+}
 
 
 class BoardCreate(BaseModel):
@@ -74,6 +84,10 @@ async def create_board(req: BoardCreate, user=Depends(current_user)):
         )
     board = _serialize(db.query_one("SELECT * FROM boards WHERE id = ?", (board_id,)))
     await hub.broadcast("board.create", board)
+    emoji, label = KIND_ANNOUNCE[req.kind]
+    await messaging.announce(
+        user["name"], f"{emoji} **{user['name']}** opened a new {label} — **{board['name']}**"
+    )
     return board
 
 

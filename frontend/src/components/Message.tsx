@@ -27,13 +27,26 @@ function MessageRow({
   const [linked, setLinked] = useState(false);
 
   if (message.kind === "system") {
+    // Conversation dividers stay a quiet line; channel announcements (new
+    // channels/boards, game results) get a friendly centered chip with the
+    // markdown (bold, #channel links) actually rendered.
+    if (message.conversation_id) {
+      return (
+        <div className="my-3 flex items-center gap-3 px-4">
+          <div className="h-px flex-1 bg-[var(--c-border)]" />
+          <span className="text-[10px] uppercase tracking-wide text-[var(--c-muted)]">
+            {message.content}
+          </span>
+          <div className="h-px flex-1 bg-[var(--c-border)]" />
+        </div>
+      );
+    }
     return (
-      <div className="my-3 flex items-center gap-3 px-4">
-        <div className="h-px flex-1 bg-[var(--c-border)]" />
-        <span className="text-[10px] uppercase tracking-wide text-[var(--c-muted)]">
-          {message.content}
-        </span>
-        <div className="h-px flex-1 bg-[var(--c-border)]" />
+      <div className="my-3 flex justify-center px-4">
+        <div
+          className="fade-in max-w-[85%] rounded-full border border-[var(--c-accent)]/25 bg-[var(--c-accent-soft)] px-4 py-1.5 text-center text-sm shadow-sm"
+          dangerouslySetInnerHTML={{ __html: renderContent(message.content) }}
+        />
       </div>
     );
   }

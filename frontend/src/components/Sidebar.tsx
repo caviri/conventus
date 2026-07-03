@@ -38,7 +38,10 @@ const BOARD_KIND = {
 } as const;
 
 function boardIcon(kind: BoardKind, size = 16) {
-  const Icon = BOARD_KIND[kind].icon;
+  // Tolerate kinds this bundle doesn't know yet: a client that stayed open
+  // across a deploy may receive boards of a newer kind — falling back to a
+  // generic icon beats crashing the whole sidebar.
+  const Icon = (BOARD_KIND[kind] || { icon: FileText }).icon;
   return <Icon size={size} className="shrink-0" />;
 }
 

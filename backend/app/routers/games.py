@@ -84,15 +84,7 @@ async def _publish_state(board_id: int, user: dict) -> dict:
     return _response(row, user)
 
 
-async def _announce(author: str, content: str) -> None:
-    """Drop a system message in the default channel so the whole room hears it."""
-    channel = db.query_one(
-        "SELECT id FROM channels ORDER BY is_default DESC, id LIMIT 1"
-    )
-    if channel:
-        await messaging.create_message(
-            author=author, content=content, kind="system", channel_id=channel["id"]
-        )
+_announce = messaging.announce  # game events land in the main channel too
 
 
 class SetupUpdate(BaseModel):

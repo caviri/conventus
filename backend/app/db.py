@@ -259,6 +259,13 @@ def init() -> None:
                 "VALUES (?, ?, 1, ?)",
                 ("general", "Welcome to Conventus 👋", now),
             )
+        # The room must always keep a main channel: if none is flagged default
+        # (e.g. after an import of an odd export), promote the oldest one.
+        elif conn.execute("SELECT 1 FROM channels WHERE is_default = 1").fetchone() is None:
+            conn.execute(
+                "UPDATE channels SET is_default = 1 "
+                "WHERE id = (SELECT MIN(id) FROM channels)"
+            )
         if conn.execute("SELECT COUNT(*) AS n FROM boards").fetchone()["n"] == 0:
             conn.execute(
                 "INSERT INTO boards(kind, name, created_at) VALUES ('canvas', 'Live document', ?)",

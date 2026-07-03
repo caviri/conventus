@@ -293,6 +293,16 @@ async def create_message(
     return message
 
 
+async def announce(author: str, content: str) -> None:
+    """Drop a system announcement in the room's main channel — new channels,
+    boards, game results and the like land where everyone will see them."""
+    channel = db.query_one("SELECT id FROM channels ORDER BY is_default DESC, id LIMIT 1")
+    if channel:
+        await create_message(
+            author=author, content=content, kind="system", channel_id=channel["id"]
+        )
+
+
 async def notify_mentions(message: dict[str, Any]) -> None:
     """Ping any room members named with @handle in the message."""
     names = {n.lower() for n in MENTION_RE.findall(message["content"] or "")}

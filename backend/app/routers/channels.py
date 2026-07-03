@@ -55,6 +55,7 @@ async def create_channel(req: ChannelCreate, user=Depends(current_user)):
     row = db.query_one("SELECT * FROM channels WHERE id = ?", (channel_id,))
     channel = _serialize_channel(row)
     await hub.broadcast("channel.create", channel)
+    await messaging.announce(user["name"], f"🌿 **{user['name']}** planted a new channel — #{name}")
     return channel
 
 
