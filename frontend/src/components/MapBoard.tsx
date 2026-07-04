@@ -298,14 +298,24 @@ export default function MapBoard({ board }: { board: Board }) {
     return [e.clientX - r.left, e.clientY - r.top];
   }
 
+  const drawPointerRef = useRef<number | null>(null);
+
   function onDrawStart(e: React.PointerEvent) {
+    if (drawPointerRef.current !== null) {
+      // A second finger — this was meant as a pinch, not a line. Abandon it.
+      drawPointerRef.current = null;
+      drawPtsRef.current = [];
+      setDrawTick((t) => t + 1);
+      return;
+    }
+    drawPointerRef.current = e.pointerId;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     drawPtsRef.current = [drawPoint(e)];
     setDrawTick((t) => t + 1);
   }
 
   function onDrawMove(e: React.PointerEvent) {
-    if (!drawPtsRef.current.length) return;
+    if (!drawPtsRef.current.length || e.pointerId !== drawPointerRef.current) return;
     const [x, y] = drawPoint(e);
     const last = drawPtsRef.current[drawPtsRef.current.length - 1];
     if (Math.hypot(x - last[0], y - last[1]) < 3) return;
@@ -313,7 +323,9 @@ export default function MapBoard({ board }: { board: Board }) {
     setDrawTick((t) => t + 1);
   }
 
-  function onDrawEnd() {
+  function onDrawEnd(e: React.PointerEvent) {
+    if (e.pointerId !== drawPointerRef.current) return;
+    drawPointerRef.current = null;
     const pts = drawPtsRef.current;
     drawPtsRef.current = [];
     setDrawTick((t) => t + 1);
@@ -570,7 +582,21 @@ export default function MapBoard({ board }: { board: Board }) {
         attributionControl: { compact: true },
       });
       mapRef.current = map;
-      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+      (containerRef.current as any).__map = map; // console/tests handle
+      // Phones: pinch zooms, two fingers rotate. Explicit (not just defaults),
+      // and the compass shows the bearing + taps back to north.
+      map.touchZoomRotate.enable();
+      map.touchZoomRotate.enableRotation();
+      map.addControl(
+        new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }),
+        "top-right"
+      );
+      // iOS standalone PWAs run Safari's native page-pinch alongside touch
+      // events; swallow it inside the map so the gesture zooms the MAP, not
+      // the app shell. (gesture* events are WebKit-only; no-ops elsewhere.)
+      const stopPageZoom = (e: Event) => e.preventDefault();
+      containerRef.current.addEventListener("gesturestart", stopPageZoom);
+      containerRef.current.addEventListener("gesturechange", stopPageZoom);
       map.on("error", () => {
         /* tile/style hiccups are non-fatal */
       });
