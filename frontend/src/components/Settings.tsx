@@ -106,6 +106,19 @@ export default function Settings() {
   const [installable, setInstallable] = useState(canInstall());
   useEffect(() => onInstallChange(() => setInstallable(canInstall())), []);
 
+  // Per-user push preferences (stored server-side; they filter deliveries).
+  type NotifyPrefs = { mentions: boolean; replies: boolean; dms: boolean; all_channel: boolean };
+  const [prefs, setPrefs] = useState<NotifyPrefs | null>(null);
+  useEffect(() => {
+    api.get<NotifyPrefs>("/api/push/prefs").then(setPrefs).catch(() => {});
+  }, []);
+  function togglePref(key: keyof NotifyPrefs) {
+    if (!prefs) return;
+    const next = { ...prefs, [key]: !prefs[key] };
+    setPrefs(next);
+    api.put("/api/push/prefs", next).catch(() => {});
+  }
+
   useEffect(() => {
     if (me) setStatus(me.status);
   }, [me?.status]);
@@ -369,8 +382,8 @@ export default function Settings() {
               <h2 className="font-semibold">Notifications</h2>
             </div>
             <p className="mb-3 text-sm text-[var(--c-muted)]">
-              Get notified when someone @mentions you — on this device even when
-              the tab is closed (via Web Push), where supported.
+              Reach this device even when the app is closed (via Web Push, where
+              supported). Choose what's worth a ping:
             </p>
             <button
               className="btn"
@@ -383,6 +396,27 @@ export default function Settings() {
             >
               {notif ? "Notifications enabled ✓" : "Enable notifications"}
             </button>
+            {prefs && (
+              <div className="mt-3 flex flex-col gap-2 text-sm">
+                {(
+                  [
+                    ["mentions", "@mentions"],
+                    ["replies", "Replies to my messages"],
+                    ["dms", "Direct messages"],
+                    ["all_channel", "Every channel message (noisy)"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <label key={key} className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={prefs[key]}
+                      onChange={() => togglePref(key)}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            )}
           </section>
 
           <section className="card p-4">

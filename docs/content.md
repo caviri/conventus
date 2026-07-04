@@ -188,11 +188,13 @@ like whiteboard strokes, and they're readable/writable over the REST API too
 ### 🔔 Notifications
 **Web Push** (service worker + VAPID) reaches you even when the app is closed —
 for **@mentions**, **replies to your messages**, and **direct messages**, each
-worded by reason and deep-linking straight to the message or DM. While the tab
-is open you also get desktop notifications and a title-bar badge for mentions,
-plus an offline / reconnecting indicator. Enable it from **Settings** or the
-mobile menu dot; on iPhone this needs the app **installed to the Home Screen**
-(iOS 16.4+) — Apple doesn't allow push for plain Safari tabs.
+worded by reason and deep-linking straight to the message or DM. Pick what's
+worth a ping in **Settings → Notifications** (mentions, replies, DMs, or the
+opt-in *every channel message* firehose — per user, stored server-side). While
+the tab is open you also get desktop notifications and a title-bar badge for
+mentions, plus an offline / reconnecting indicator. Enable it from **Settings**
+or the mobile menu dot; on iPhone this needs the app **installed to the Home
+Screen** (iOS 16.4+) — Apple doesn't allow push for plain Safari tabs.
 
 ![Offline / reconnecting banner](img/offline-banner.png)
 
@@ -518,6 +520,8 @@ Use the admin password in the same `"password"` field to get an **admin** token
 | `GET  /api/push/config`        | VAPID public key (no auth)                    |
 | `POST /api/push/subscribe`     | `{subscription}`                              |
 | `POST /api/push/unsubscribe`   | `{endpoint}`                                  |
+| `GET  /api/push/prefs`         | Your push preferences                         |
+| `PUT  /api/push/prefs`         | `{mentions, replies, dms, all_channel}`       |
 | `POST /api/admin/reserve` 🔒   | `{name, password, is_admin?}`                 |
 | `DELETE /api/admin/members/{name}` 🔒 | Remove a member                        |
 | `POST /api/admin/export` 🔒    | Download the room as a zip. Bot API keys are **stripped by default**; add `?include_secrets=true` for a full backup (the zip then holds usable plaintext keys — guard it) |

@@ -24,6 +24,25 @@ log = logging.getLogger("conventus.webpush")
 _VAPID: dict[str, Any] = {}
 VAPID_SUBJECT = "mailto:admin@conventus.local"
 
+# Per-user push preferences (users.notify_prefs, json). Defaults: every direct
+# reason on, the every-channel-message firehose off.
+DEFAULT_PREFS: dict[str, bool] = {
+    "mentions": True,
+    "replies": True,
+    "dms": True,
+    "all_channel": False,
+}
+
+
+def prefs_for(name: str) -> dict[str, bool]:
+    row = db.query_one("SELECT notify_prefs FROM users WHERE name = ?", (name,))
+    prefs = dict(DEFAULT_PREFS)
+    if row:
+        prefs.update(
+            {k: bool(v) for k, v in db.loads(row["notify_prefs"], {}).items() if k in prefs}
+        )
+    return prefs
+
 
 def _vapid() -> dict[str, Any]:
     if _VAPID:

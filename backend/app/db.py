@@ -201,6 +201,7 @@ MIGRATIONS = [
     ("agent", "model_type", "TEXT NOT NULL DEFAULT 'standard'"),
     ("users", "status", "TEXT NOT NULL DEFAULT ''"),
     ("users", "avatar", "TEXT NOT NULL DEFAULT ''"),
+    ("users", "notify_prefs", "TEXT NOT NULL DEFAULT ''"),
     ("channels", "folder_id", "INTEGER"),
     ("boards", "folder_id", "INTEGER"),
 ]

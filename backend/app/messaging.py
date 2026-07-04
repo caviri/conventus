@@ -328,6 +328,14 @@ async def notify_people(message: dict[str, Any]) -> None:
         if parent and parent["author"] != author and parent["kind"] != "bot":
             targets[parent["author"]] = "reply"
 
+    # Anyone who opted into the every-channel-message firehose (lowest priority).
+    if message["channel_id"]:
+        for r in db.query_all(
+            "SELECT name, notify_prefs FROM users WHERE notify_prefs != ''"
+        ):
+            if r["name"] != author and db.loads(r["notify_prefs"], {}).get("all_channel"):
+                targets.setdefault(r["name"], "channel")
+
     # @handles — channel messages only: a DM excerpt must never reach someone
     # outside that DM.
     if message["channel_id"]:
@@ -367,15 +375,20 @@ async def notify_people(message: dict[str, Any]) -> None:
             context["dm_id"] = message["dm_id"]
         await hub.send_to_users(mentioned, "mention", context)
 
-    # Web Push for everyone concerned, worded by reason.
+    # Web Push for everyone concerned, worded by reason and filtered by each
+    # person's Settings → Notifications preferences.
     from . import webpush
 
     titles = {
         "mention": f"{author} mentioned you" + (f" in #{where}" if where else ""),
         "reply": f"{author} replied to you" + (f" in #{where}" if where else ""),
         "dm": f"{author} messaged you",
+        "channel": f"{author}" + (f" in #{where}" if where else ""),
     }
+    pref_key = {"mention": "mentions", "reply": "replies", "dm": "dms", "channel": "all_channel"}
     for name, why in targets.items():
+        if not webpush.prefs_for(name).get(pref_key[why], True):
+            continue
         await webpush.send_to_users(
             [name],
             {
