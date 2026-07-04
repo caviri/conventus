@@ -30,6 +30,7 @@ export default function Composer({
   const fileRef = useRef<HTMLInputElement>(null);
   const lastTyping = useRef(0);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const hlRef = useRef<HTMLDivElement>(null);
 
   const user = useStore((s) => s.user);
   const members = useStore((s) => s.members);
@@ -90,6 +91,69 @@ export default function Composer({
     return items.filter((it) => it.name.toLowerCase().includes(q)).sort(byRank).slice(0, 6);
   }, [tag, members, channels, bots]);
   const showTags = !widgetMode && tagMatches.length > 0;
+
+  // --- Live highlighting of @mentions, #channels and /commands as you type.
+  // A styled overlay renders behind the textarea (whose text goes transparent);
+  // spans only change color/background, never glyph metrics, so both layers
+  // line up exactly.
+  const mentionable = useMemo(
+    () =>
+      new Set([
+        ...members.map((m) => m.name.toLowerCase()),
+        ...bots.filter((b) => b.enabled).map((b) => b.name.toLowerCase()),
+      ]),
+    [members, bots]
+  );
+  const channelNames = useMemo(
+    () => new Set(channels.map((c) => c.name.toLowerCase())),
+    [channels]
+  );
+
+  const highlighted = useMemo(() => {
+    if (widgetMode || !text) return null;
+    const out: React.ReactNode[] = [];
+    let last = 0;
+    let key = 0;
+    const cmd = text.match(/^\/([a-zA-Z-]+)/);
+    if (cmd && matchCommands(cmd[0]).some((c) => c.name === cmd[1])) {
+      out.push(
+        <span
+          key={key++}
+          style={{ color: "var(--c-accent-2)", background: "var(--c-accent-soft)", borderRadius: 4 }}
+        >
+          {cmd[0]}
+        </span>
+      );
+      last = cmd[0].length;
+    }
+    const re = /([@#])([\w.\-]+)/g;
+    re.lastIndex = last;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text))) {
+      const [tok, sigil, name] = m;
+      const known =
+        sigil === "@"
+          ? mentionable.has(name.toLowerCase())
+          : channelNames.has(name.toLowerCase());
+      if (!known) continue;
+      if (m.index > last) out.push(text.slice(last, m.index));
+      out.push(
+        <span
+          key={key++}
+          style={
+            sigil === "@"
+              ? { color: "var(--c-accent)", background: "var(--c-accent-soft)", borderRadius: 4 }
+              : { color: "var(--c-accent-2)" }
+          }
+        >
+          {tok}
+        </span>
+      );
+      last = m.index + tok.length;
+    }
+    out.push(text.slice(last));
+    return out;
+  }, [text, widgetMode, mentionable, channelNames]);
 
   function makeCtx(): CommandContext {
     return {
@@ -446,20 +510,43 @@ export default function Composer({
             <Code2 size={18} />
           </button>
           <MediaCapture onSend={sendMedia} />
-          <textarea
-            ref={taRef}
-            rows={1}
-            value={text}
-            onChange={onChange}
-            onKeyDown={onKeyDown}
-            onPaste={onPaste}
-            placeholder={
-              widgetMode ? "Paste HTML — sandboxed widget…" : "Write a message…"
-            }
-            className={`max-h-48 flex-1 resize-none bg-transparent py-2 text-sm outline-none ${
-              widgetMode ? "font-mono text-xs" : ""
-            }`}
-          />
+          <div className="relative min-w-0 flex-1">
+            {highlighted !== null && (
+              <div
+                ref={hlRef}
+                aria-hidden
+                className="pointer-events-none absolute inset-0 max-h-48 overflow-hidden whitespace-pre-wrap break-words py-2 text-sm"
+              >
+                {highlighted}
+                {"​"}
+              </div>
+            )}
+            <textarea
+              ref={taRef}
+              rows={1}
+              value={text}
+              onChange={onChange}
+              onKeyDown={onKeyDown}
+              onPaste={onPaste}
+              onScroll={() => {
+                if (hlRef.current && taRef.current)
+                  hlRef.current.scrollTop = taRef.current.scrollTop;
+              }}
+              placeholder={
+                widgetMode ? "Paste HTML — sandboxed widget…" : "Write a message…"
+              }
+              className={`block max-h-48 w-full resize-none bg-transparent py-2 text-sm outline-none ${
+                widgetMode ? "font-mono text-xs" : ""
+              }`}
+              style={
+                // Glyphs come from the overlay; the textarea keeps the caret.
+                // When empty, stay opaque so the placeholder shows normally.
+                highlighted !== null
+                  ? { color: "transparent", caretColor: "var(--c-text)" }
+                  : undefined
+              }
+            />
+          </div>
           <button
             className="btn btn-primary !px-3"
             onClick={send}
