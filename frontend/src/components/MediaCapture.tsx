@@ -43,6 +43,21 @@ function supported(mime: string): boolean {
     return false;
   }
 }
+
+// MP4 first: it's the one container every device *plays* (iOS can neither
+// record nor play WebM), with WebM as the fallback for older Chromium.
+const VIDEO_MIMES = [
+  "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+  "video/mp4",
+  "video/webm;codecs=vp8,opus",
+  "video/webm",
+];
+const AUDIO_MIMES = ["audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/webm;codecs=opus", "audio/webm"];
+
+function pickMime(candidates: string[]): string {
+  return candidates.find(supported) || "";
+}
+
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
 export default function MediaCapture({
@@ -94,8 +109,13 @@ export default function MediaCapture({
     setBusy(false);
   }
 
-  async function uploadAndSend(blob: Blob, kind: "audio" | "video") {
+  async function uploadAndSend(chunks: Blob[], kind: "audio" | "video", recMime: string) {
     stopMedia();
+    // Label the file with what the recorder ACTUALLY produced — iOS records
+    // MP4 (it has no WebM), and a mislabeled container breaks playback.
+    const base = (recMime.split(";")[0] || `${kind}/webm`).trim();
+    const ext = base.includes("mp4") ? "mp4" : "webm";
+    const blob = new Blob(chunks, { type: base });
     if (!blob.size) {
       close();
       return;
@@ -103,8 +123,7 @@ export default function MediaCapture({
     setBusy(true);
     setError("");
     try {
-      const type = kind === "audio" ? "audio/webm" : "video/webm";
-      const file = new File([blob], `${kind}-${Date.now()}.webm`, { type });
+      const file = new File([blob], `${kind}-${Date.now()}.${ext}`, { type: base });
       const uploaded = await api.upload(file);
       await onSend(uploaded);
       close();
@@ -123,11 +142,11 @@ export default function MediaCapture({
         audio: { echoCancellation: true, noiseSuppression: true },
       });
       streamRef.current = stream;
-      const mime = supported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "";
+      const mime = pickMime(AUDIO_MIMES);
       const rec = new MediaRecorder(stream, mime ? { mimeType: mime, audioBitsPerSecond: 24000 } : {});
       chunksRef.current = [];
       rec.ondataavailable = (e) => e.data?.size && chunksRef.current.push(e.data);
-      rec.onstop = () => uploadAndSend(new Blob(chunksRef.current, { type: "audio/webm" }), "audio");
+      rec.onstop = () => uploadAndSend(chunksRef.current, "audio", rec.mimeType || mime);
       recRef.current = rec;
       rec.start();
       setMode("audio");
@@ -181,15 +200,11 @@ export default function MediaCapture({
       ...cv.captureStream(12).getVideoTracks(),
       ...stream.getAudioTracks(),
     ]);
-    const mime = supported("video/webm;codecs=vp8,opus")
-      ? "video/webm;codecs=vp8,opus"
-      : supported("video/webm")
-      ? "video/webm"
-      : "";
+    const mime = pickMime(VIDEO_MIMES);
     const rec = new MediaRecorder(combined, mime ? { mimeType: mime, videoBitsPerSecond: 300000 } : {});
     chunksRef.current = [];
     rec.ondataavailable = (e) => e.data?.size && chunksRef.current.push(e.data);
-    rec.onstop = () => uploadAndSend(new Blob(chunksRef.current, { type: "video/webm" }), "video");
+    rec.onstop = () => uploadAndSend(chunksRef.current, "video", rec.mimeType || mime);
     recRef.current = rec;
     rec.start();
     setRecording(true);
@@ -228,7 +243,15 @@ export default function MediaCapture({
 
       {mode === "video" && (
         <>
-          <video ref={videoElRef} className="hidden" muted playsInline />
+          {/* Must be rendered (not display:none) — iOS refuses to decode a
+              hidden video, which left the canvas (and the recording) black. */}
+          <video
+            ref={videoElRef}
+            className="pointer-events-none absolute h-px w-px opacity-0"
+            muted
+            playsInline
+            autoPlay
+          />
           <canvas
             ref={canvasRef}
             width={V_W}
