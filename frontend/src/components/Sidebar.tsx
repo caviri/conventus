@@ -3,6 +3,8 @@ import { useStore, viewKey } from "../store";
 import { api } from "../api";
 import { getTheme, toggleTheme } from "../theme";
 import { promptName } from "./PromptModal";
+import { requestNotifications } from "../notifications";
+import { pushSupported, subscribeToPush } from "../push";
 import type { View, BoardKind, Channel, Board, Folder } from "../types";
 import {
   Hash,
@@ -26,6 +28,8 @@ import {
   Radio,
   Dices,
   Map as MapIcon,
+  Bell,
+  X,
 } from "lucide-react";
 
 const BOARD_KIND = {
@@ -83,6 +87,12 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [theme, setThemeState] = useState(getTheme());
+  const [canAskNotif, setCanAskNotif] = useState(
+    () =>
+      pushSupported() &&
+      "Notification" in window &&
+      Notification.permission === "default"
+  );
   const [dragOver, setDragOver] = useState<number | "root" | null>(null);
   const [collapsed, setCollapsed] = useState<Set<number>>(() => {
     try {
@@ -272,69 +282,56 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
             Channels
           </span>
           <button
-            className="text-[var(--c-muted)] hover:text-[var(--c-text)]"
-            onClick={() => setMenuOpen((v) => !v)}
+            className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--c-accent-soft)] text-[var(--c-accent)] transition hover:bg-[var(--c-accent)] hover:text-white"
+            onClick={() => setMenuOpen(true)}
             title="Create…"
+            aria-label="Create"
           >
-            <Plus size={16} />
+            <Plus size={18} />
           </button>
-          {menuOpen && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-              <div className="card absolute right-1 top-7 z-20 w-44 overflow-hidden p-1 text-sm shadow-2xl fade-in">
+        </div>
+
+        {/* Create — a roomy modal with big touch targets (phones especially) */}
+        {menuOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/60" onClick={() => setMenuOpen(false)} />
+            <div className="card fade-in relative w-full max-w-sm p-4 shadow-2xl">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="font-display text-lg font-semibold">Create something</h2>
                 <button
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--c-elevated)]"
-                  onClick={createChannel}
+                  className="text-[var(--c-muted)] hover:text-[var(--c-text)]"
+                  onClick={() => setMenuOpen(false)}
+                  aria-label="Close"
                 >
-                  <Hash size={15} /> New channel
-                </button>
-                <button
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--c-elevated)]"
-                  onClick={() => createBoard("canvas")}
-                >
-                  <FileText size={15} /> New live document
-                </button>
-                <button
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--c-elevated)]"
-                  onClick={() => createBoard("whiteboard")}
-                >
-                  <Pencil size={15} /> New whiteboard
-                </button>
-                <button
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--c-elevated)]"
-                  onClick={() => createBoard("kanban")}
-                >
-                  <Columns3 size={15} /> New kanban
-                </button>
-                <button
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--c-elevated)]"
-                  onClick={() => createBoard("room")}
-                >
-                  <Radio size={15} /> New call room
-                </button>
-                <button
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--c-elevated)]"
-                  onClick={() => createBoard("game")}
-                >
-                  <Dices size={15} /> New game (bingo)
-                </button>
-                <button
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--c-elevated)]"
-                  onClick={() => createBoard("map")}
-                >
-                  <MapIcon size={15} /> New map
-                </button>
-                <div className="my-1 border-t border-[var(--c-border)]" />
-                <button
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--c-elevated)]"
-                  onClick={createFolder}
-                >
-                  <FolderPlus size={15} /> New folder
+                  <X size={18} />
                 </button>
               </div>
-            </>
-          )}
-        </div>
+              <div className="grid grid-cols-2 gap-2">
+                {(
+                  [
+                    { label: "Channel", icon: Hash, run: createChannel },
+                    { label: "Live document", icon: FileText, run: () => createBoard("canvas") },
+                    { label: "Whiteboard", icon: Pencil, run: () => createBoard("whiteboard") },
+                    { label: "Kanban", icon: Columns3, run: () => createBoard("kanban") },
+                    { label: "Call room", icon: Radio, run: () => createBoard("room") },
+                    { label: "Game (bingo)", icon: Dices, run: () => createBoard("game") },
+                    { label: "Map", icon: MapIcon, run: () => createBoard("map") },
+                    { label: "Folder", icon: FolderPlus, run: createFolder },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.label}
+                    className="flex flex-col items-center gap-2 rounded-xl border border-[var(--c-border)] bg-[var(--c-surface)] px-3 py-4 text-sm font-medium transition hover:border-[var(--c-accent)] hover:bg-[var(--c-elevated)]"
+                    onClick={opt.run}
+                  >
+                    <opt.icon size={22} className="text-[var(--c-accent)]" />
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
         {/* Folders — collapsible groups holding channels and boards */}
         {folders.map((f) => {
           const isCollapsed = collapsed.has(f.id);
@@ -505,6 +502,18 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
 
       {/* Footer nav */}
       <div className="border-t border-[var(--c-border)] p-2">
+        {canAskNotif && (
+          <NavBtn
+            icon={<Bell size={16} className="text-[var(--c-accent-2)]" />}
+            label="Turn on notifications"
+            active={false}
+            onClick={async () => {
+              const granted = (await requestNotifications()) === "granted";
+              if (granted) await subscribeToPush();
+              setCanAskNotif(false);
+            }}
+          />
+        )}
         <NavBtn
           icon={<HardDrive size={16} />}
           label="Files"
