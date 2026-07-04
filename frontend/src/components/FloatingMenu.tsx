@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { useStore } from "../store";
+import { notificationsEnabled, requestNotifications } from "../notifications";
+import { pushSupported, subscribeToPush } from "../push";
 import {
   Menu,
   Hash,
   Search,
   Settings as SettingsIcon,
   Shield,
+  Bell,
 } from "lucide-react";
 
 // The mobile menu "dot": a small floating button that opens a submenu, and —
@@ -20,6 +23,9 @@ export default function FloatingMenu({ onOpenSidebar }: { onOpenSidebar: () => v
   const setSearchOpen = useStore((s) => s.setSearchOpen);
   const [open, setOpen] = useState(false);
   const [hint, setHint] = useState(() => !localStorage.getItem(HINT_KEY));
+  const [notifOn, setNotifOn] = useState(() => notificationsEnabled());
+  const canAskNotif =
+    pushSupported() && "Notification" in window && Notification.permission === "default";
 
   function dismissHint() {
     if (!hint) return;
@@ -94,6 +100,18 @@ export default function FloatingMenu({ onOpenSidebar }: { onOpenSidebar: () => v
             >
               <SettingsIcon size={15} className="text-[var(--c-muted)]" /> Settings
             </button>
+            {canAskNotif && !notifOn && (
+              <button
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 hover:bg-[var(--c-elevated)]"
+                onClick={item(async () => {
+                  const granted = (await requestNotifications()) === "granted";
+                  setNotifOn(granted);
+                  if (granted) await subscribeToPush();
+                })}
+              >
+                <Bell size={15} className="text-[var(--c-accent-2)]" /> Turn on notifications
+              </button>
+            )}
             {user?.is_admin && (
               <button
                 className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 hover:bg-[var(--c-elevated)]"

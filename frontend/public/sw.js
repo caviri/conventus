@@ -31,7 +31,7 @@ self.addEventListener("push", (event) => {
       body: data.body || "",
       icon: "/favicon.svg",
       badge: "/favicon.svg",
-      tag: "conventus-mention",
+      tag: data.tag || "conventus",
       data: { url: data.url || "/" },
     })
   );

@@ -37,11 +37,19 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const deepLinked = useRef(false);
 
-  // Honor a ?msg=<channelId>-<messageId> permalink on first load.
+  // Honor ?msg=<channelId>-<messageId> permalinks and ?dm=<id> deep links
+  // (push notifications use both) on first load.
   useEffect(() => {
     if (!user || deepLinked.current) return;
     deepLinked.current = true;
-    const msg = new URLSearchParams(location.search).get("msg");
+    const params = new URLSearchParams(location.search);
+    const dm = Number(params.get("dm"));
+    if (dm) {
+      history.replaceState(null, "", location.pathname);
+      setView({ type: "dm", id: dm });
+      return;
+    }
+    const msg = params.get("msg");
     if (!msg) return;
     const [cid, mid] = msg.split("-").map(Number);
     history.replaceState(null, "", location.pathname);

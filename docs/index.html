@@ -297,9 +297,13 @@ like whiteboard strokes, and they're readable/writable over the REST API too
 ![Editing a bot in the admin panel](img/bot-edit.png)
 
 ### 🔔 Notifications
-**@mention notifications** — desktop + a title-bar badge while the tab is open,
-and **Web Push** (via a service worker + VAPID) so subscribers are notified even
-when the app is closed. Plus an offline / reconnecting indicator.
+**Web Push** (service worker + VAPID) reaches you even when the app is closed —
+for **@mentions**, **replies to your messages**, and **direct messages**, each
+worded by reason and deep-linking straight to the message or DM. While the tab
+is open you also get desktop notifications and a title-bar badge for mentions,
+plus an offline / reconnecting indicator. Enable it from **Settings** or the
+mobile menu dot; on iPhone this needs the app **installed to the Home Screen**
+(iOS 16.4+) — Apple doesn't allow push for plain Safari tabs.
 
 ![Offline / reconnecting banner](img/offline-banner.png)
 

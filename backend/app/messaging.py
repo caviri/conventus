@@ -303,56 +303,96 @@ async def announce(author: str, content: str) -> None:
         )
 
 
-async def notify_mentions(message: dict[str, Any]) -> None:
-    """Ping any room members named with @handle in the message."""
-    names = {n.lower() for n in MENTION_RE.findall(message["content"] or "")}
-    if not names:
-        return
-    rows = db.query_all("SELECT name FROM users")
-    targets = [
-        r["name"]
-        for r in rows
-        if r["name"].lower() in names and r["name"] != message["author"]
-    ]
+async def notify_people(message: dict[str, Any]) -> None:
+    """Notify whoever this message concerns — @mentions in channels, replies to
+    your message, and direct messages. Each person is pinged once, with the
+    most specific reason winning (mention > reply > dm), over the in-app WS
+    event (mentions only) and Web Push (all reasons)."""
+    author = message["author"]
+    content = (message["content"] or "").strip()
+    excerpt = content[:140] + ("…" if len(content) > 140 else "")
+
+    targets: dict[str, str] = {}  # name -> dm | reply | mention
+
+    # A DM notifies the other participant.
+    if message["dm_id"]:
+        for name in dm_members(message["dm_id"]):
+            if name != author:
+                targets[name] = "dm"
+
+    # A quote-reply notifies the parent message's author.
+    if message.get("reply_to") and message["channel_id"]:
+        parent = db.query_one(
+            "SELECT author, kind FROM messages WHERE id = ?", (message["reply_to"],)
+        )
+        if parent and parent["author"] != author and parent["kind"] != "bot":
+            targets[parent["author"]] = "reply"
+
+    # @handles — channel messages only: a DM excerpt must never reach someone
+    # outside that DM.
+    if message["channel_id"]:
+        names = {n.lower() for n in MENTION_RE.findall(content)}
+        if names:
+            for r in db.query_all("SELECT name FROM users"):
+                if r["name"].lower() in names and r["name"] != author:
+                    targets[r["name"]] = "mention"
+
     if not targets:
         return
 
-    context: dict[str, Any] = {"author": message["author"], "message_id": message["id"]}
-    if message["channel_id"]:
-        channel = db.query_one(
-            "SELECT name FROM channels WHERE id = ?", (message["channel_id"],)
-        )
-        context["channel_id"] = message["channel_id"]
-        context["channel_name"] = channel["name"] if channel else "channel"
-    else:
-        context["dm_id"] = message["dm_id"]
-    excerpt = (message["content"] or "").strip()
-    context["excerpt"] = excerpt[:140] + ("…" if len(excerpt) > 140 else "")
-    await hub.send_to_users(targets, "mention", context)
+    channel = (
+        db.query_one("SELECT name FROM channels WHERE id = ?", (message["channel_id"],))
+        if message["channel_id"]
+        else None
+    )
+    where = channel["name"] if channel else None
+    url = (
+        f"/?msg={message['channel_id']}-{message['id']}"
+        if message["channel_id"]
+        else (f"/?dm={message['dm_id']}" if message["dm_id"] else "/")
+    )
 
-    # Also deliver a Web Push so offline/backgrounded users are notified.
+    # In-app toast (existing behavior) — mentions only.
+    mentioned = [n for n, why in targets.items() if why == "mention"]
+    if mentioned:
+        context: dict[str, Any] = {
+            "author": author,
+            "message_id": message["id"],
+            "excerpt": excerpt,
+        }
+        if message["channel_id"]:
+            context["channel_id"] = message["channel_id"]
+            context["channel_name"] = where or "channel"
+        else:
+            context["dm_id"] = message["dm_id"]
+        await hub.send_to_users(mentioned, "mention", context)
+
+    # Web Push for everyone concerned, worded by reason.
     from . import webpush
 
-    where = context.get("channel_name")
-    await webpush.send_to_users(
-        targets,
-        {
-            "title": f"{message['author']} mentioned you"
-            + (f" in #{where}" if where else ""),
-            "body": context["excerpt"],
-            "url": (
-                f"/?msg={message['channel_id']}-{message['id']}"
-                if message["channel_id"]
-                else "/"
-            ),
-        },
-    )
+    titles = {
+        "mention": f"{author} mentioned you" + (f" in #{where}" if where else ""),
+        "reply": f"{author} replied to you" + (f" in #{where}" if where else ""),
+        "dm": f"{author} messaged you",
+    }
+    for name, why in targets.items():
+        await webpush.send_to_users(
+            [name],
+            {
+                "title": titles[why],
+                "body": excerpt,
+                "url": url,
+                # Unique per message so a DM ping never replaces an unseen mention.
+                "tag": f"conventus-{message['id']}",
+            },
+        )
 
 
 async def _post_process(message: dict[str, Any]) -> None:
-    # Private agent threads must not ping other room members.
-    if not message.get("conversation_id"):
-        await notify_mentions(message)
+    # Private agent threads must not ping other room members; system
+    # announcements shouldn't push either.
+    if not message.get("conversation_id") and message["kind"] != "system":
+        await notify_people(message)
 
     urls = previews.extract_urls(message["content"])
     if urls:
