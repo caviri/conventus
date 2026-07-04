@@ -1,4 +1,4 @@
-import { memo, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { useStore } from "../store";
 import type { User } from "../types";
@@ -15,6 +15,26 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
+
+  // Phones: the on-screen keyboard covers the vertically-centered card, hiding
+  // the fields being typed into. Track the visual viewport and lift the card by
+  // half the keyboard height so it re-centers in the visible area.
+  const [lift, setLift] = useState(0);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onChange = () => {
+      const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setLift(kb > 80 ? Math.round(kb / 2) : 0);
+    };
+    vv.addEventListener("resize", onChange);
+    vv.addEventListener("scroll", onChange);
+    onChange();
+    return () => {
+      vv.removeEventListener("resize", onChange);
+      vv.removeEventListener("scroll", onChange);
+    };
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -52,7 +72,11 @@ export default function Login() {
         onSubmit={submit}
         noValidate
         className="card fade-in relative z-10 w-full p-5 sm:p-7"
-        style={{ maxWidth: "min(24rem, calc(100vw - 2rem))" }}
+        style={{
+          maxWidth: "min(24rem, calc(100vw - 2rem))",
+          transform: lift ? `translateY(-${lift}px)` : undefined,
+          transition: "transform 0.25s ease",
+        }}
       >
         <div className="mb-6 flex flex-col items-center text-center">
           <div
