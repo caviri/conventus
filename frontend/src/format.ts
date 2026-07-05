@@ -148,8 +148,10 @@ export function renderContent(text: string): string {
 
   let work = extractTables(text, hold);
 
+  // Absolute https URLs and site-relative paths ("/api/files/…" — the room's
+  // own uploads) both embed.
   work = work.replace(
-    /!\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g,
+    /!\[([^\]]*)\]\(((?:https?:\/\/|\/)[^\s)]+)\)/g,
     (_m, alt, url) => {
       const u = escapeAttr(url);
       if (/\.(mp4|webm|ogv)(\?|$)/i.test(url))
@@ -162,7 +164,7 @@ export function renderContent(text: string): string {
     }
   );
   work = work.replace(
-    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+    /\[([^\]]+)\]\(((?:https?:\/\/|\/)[^\s)]+)\)/g,
     (_m, label, url) =>
       hold(
         `<a href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(

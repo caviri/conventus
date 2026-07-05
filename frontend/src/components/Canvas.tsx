@@ -15,6 +15,7 @@ import {
   Loader2,
   Eye,
   PencilLine,
+  ImagePlus,
 } from "lucide-react";
 
 function escapeHtml(s: string): string {
@@ -38,7 +39,7 @@ function buildPrintHtml(title: string, md: string): string {
         : renderContent(seg.value)
     )
     .join("\n");
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(
+  return `<!doctype html><html><head><meta charset="utf-8"><base href="${location.origin}/"><title>${escapeHtml(
     title
   )}</title><style>
     *{box-sizing:border-box}
@@ -120,6 +121,23 @@ export default function Canvas({
   // keeps both visible in a grid and ignores this.
   const [pane, setPane] = useState<"edit" | "preview">("edit");
   const touchStart = useRef({ x: 0, y: 0 });
+  const imgInputRef = useRef<HTMLInputElement>(null);
+
+  // Upload a picture into the room and drop its markdown at the caret — the
+  // preview (and everyone else's) shows it immediately.
+  async function insertImage(file: File | undefined) {
+    if (!file) return;
+    try {
+      const up = await api.upload(file);
+      const ta = taRef.current;
+      const caret = ta?.selectionStart ?? value.length;
+      const snippet = `![${file.name.replace(/[[\]()]/g, "")}](${(up as any).url})\n`;
+      collab.doc.transact(() => ytext.insert(caret, snippet), "local");
+      setValue(value.slice(0, caret) + snippet + value.slice(caret));
+    } catch (e: any) {
+      alert(e?.message || "Upload failed");
+    }
+  }
 
   // Ask the Assistant to continue the document from the caret, inserting its
   // text into the shared Y.Text so it syncs to everyone like any other edit.
@@ -169,13 +187,25 @@ export default function Canvas({
 
   function downloadPdf() {
     setDlOpen(false);
+    const html = buildPrintHtml(title, value || "");
     const w = window.open("", "_blank");
-    if (!w) return;
-    w.document.write(buildPrintHtml(title, value || ""));
-    w.document.close();
-    w.focus();
-    // Give images/layout a moment before invoking the print → "Save as PDF".
-    setTimeout(() => w.print(), 350);
+    if (w) {
+      w.document.write(html);
+      w.document.close();
+      w.focus();
+      // Give images/layout a moment before invoking the print → "Save as PDF".
+      setTimeout(() => w.print(), 350);
+      return;
+    }
+    // iOS standalone PWAs block window.open — open the printable page via a
+    // blob URL instead (it appears in a browser sheet; share → Print/Save PDF).
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 
   function publishCursor() {
@@ -282,6 +312,23 @@ export default function Canvas({
           <span className="hidden sm:inline">AI complete</span>
         </button>
 
+        <input
+          ref={imgInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            insertImage(e.target.files?.[0] ?? undefined);
+            e.target.value = "";
+          }}
+        />
+        <button
+          className="grid h-7 w-7 place-items-center rounded text-[var(--c-muted)] hover:bg-[var(--c-elevated)] hover:text-[var(--c-text)]"
+          onClick={() => imgInputRef.current?.click()}
+          title="Insert an image"
+        >
+          <ImagePlus size={15} />
+        </button>
         <div className="relative">
           <button
             className="grid h-7 w-7 place-items-center rounded text-[var(--c-muted)] hover:bg-[var(--c-elevated)] hover:text-[var(--c-text)]"
