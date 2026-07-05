@@ -6,7 +6,16 @@ import { caretCoords } from "../caret";
 import { renderContent, splitSegments } from "../format";
 import Markdown from "./Markdown";
 import BoardActions from "./BoardActions";
-import { FileText, Download, FileDown, FileType, Sparkles, Loader2 } from "lucide-react";
+import {
+  FileText,
+  Download,
+  FileDown,
+  FileType,
+  Sparkles,
+  Loader2,
+  Eye,
+  PencilLine,
+} from "lucide-react";
 
 function escapeHtml(s: string): string {
   return s.replace(
@@ -105,6 +114,12 @@ export default function Canvas({
   const [dlOpen, setDlOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [, forceTick] = useState(0);
+
+  // Phones: editor and preview are two side-by-side "pages" — swipe left for
+  // the preview, swipe right (or the header button) to come back. Desktop
+  // keeps both visible in a grid and ignores this.
+  const [pane, setPane] = useState<"edit" | "preview">("edit");
+  const touchStart = useRef({ x: 0, y: 0 });
 
   // Ask the Assistant to continue the document from the caret, inserting its
   // text into the shared Y.Text so it syncs to everyone like any other edit.
@@ -239,8 +254,15 @@ export default function Canvas({
     <div className="flex h-full flex-col">
       <header className="surface flex items-center gap-3 border-b border-[var(--c-border)] px-4 py-3 pl-14 md:pl-4">
         <FileText size={18} className="text-[var(--c-muted)]" />
-        <div className="font-semibold">{title}</div>
+        <div className="truncate font-semibold">{title}</div>
         <BoardActions id={id} name={title} />
+        <button
+          className="btn !py-1.5 text-xs md:hidden"
+          onClick={() => setPane((p) => (p === "edit" ? "preview" : "edit"))}
+        >
+          {pane === "edit" ? <Eye size={14} /> : <PencilLine size={14} />}
+          {pane === "edit" ? "Preview" : "Edit"}
+        </button>
 
         <button
           className="btn ml-auto !py-1.5 text-xs"
@@ -257,7 +279,7 @@ export default function Canvas({
           ) : (
             <Sparkles size={14} />
           )}
-          AI complete
+          <span className="hidden sm:inline">AI complete</span>
         </button>
 
         <div className="relative">
@@ -303,8 +325,27 @@ export default function Canvas({
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col md:grid md:grid-cols-2">
-        <div className="relative min-h-0 flex-1 border-b border-[var(--c-border)] md:flex-none md:border-b-0 md:border-r">
+      <div
+        className="min-h-0 flex-1 overflow-hidden md:grid md:grid-cols-2"
+        onTouchStart={(e) => {
+          touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }}
+        onTouchEnd={(e) => {
+          if (window.innerWidth >= 768) return;
+          if (touchStart.current.x < 28) return; // edge-swipe belongs to the sidebar
+          const dx = e.changedTouches[0].clientX - touchStart.current.x;
+          const dy = e.changedTouches[0].clientY - touchStart.current.y;
+          if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+          setPane(dx < 0 ? "preview" : "edit");
+        }}
+      >
+        {/* On phones this track slides between the two pages; on md+ it's
+            display:contents, so the grid sees the panes directly. */}
+        <div
+          className="flex h-full w-[200%] transition-transform duration-300 md:contents"
+          style={{ transform: pane === "preview" ? "translateX(-50%)" : undefined }}
+        >
+        <div className="relative h-full w-1/2 border-[var(--c-border)] md:w-auto md:border-r">
           <textarea
             ref={taRef}
             value={value}
@@ -337,8 +378,9 @@ export default function Canvas({
               })}
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-4 md:h-full md:flex-none">
+        <div className="h-full w-1/2 overflow-y-auto p-4 md:w-auto">
           <Markdown content={preview} />
+        </div>
         </div>
       </div>
     </div>
