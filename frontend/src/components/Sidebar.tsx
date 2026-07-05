@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useStore, viewKey } from "../store";
 import { api } from "../api";
 import { getTheme, toggleTheme } from "../theme";
@@ -291,8 +292,12 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
           </button>
         </div>
 
-        {/* Create — a roomy modal with big touch targets (phones especially) */}
-        {menuOpen && (
+        {/* Create — a roomy modal with big touch targets (phones especially).
+            Portaled to <body>: the sidebar drawer is CSS-transformed, which
+            would make position:fixed anchor to the drawer instead of the
+            viewport and shove the modal off-center. */}
+        {menuOpen &&
+          createPortal(
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/60" onClick={() => setMenuOpen(false)} />
             <div className="card fade-in relative w-full max-w-sm p-4 shadow-2xl">
@@ -330,7 +335,8 @@ export default function Sidebar({ onNavigate }: { onNavigate: () => void }) {
                 ))}
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
         {/* Folders — collapsible groups holding channels and boards */}
         {folders.map((f) => {
