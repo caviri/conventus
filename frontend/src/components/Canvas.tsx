@@ -16,6 +16,7 @@ import {
   Eye,
   PencilLine,
   ImagePlus,
+  FileCode2,
 } from "lucide-react";
 
 function escapeHtml(s: string): string {
@@ -29,36 +30,48 @@ function slug(s: string): string {
   return s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "document";
 }
 
-// Self-contained printable HTML for the "Download PDF" path (the browser's
-// print dialog handles the actual PDF export).
+// Self-contained HTML used by both "Download PDF" (via the browser's print
+// dialog) and "Download HTML". Mermaid blocks render as real diagrams (via a
+// CDN module — they need to be online when opening the file); the layout uses
+// the full page instead of a narrow, zoomed-looking column.
 function buildPrintHtml(title: string, md: string): string {
+  let hasMermaid = false;
   const body = splitSegments(md)
-    .map((seg) =>
-      seg.type === "code" || seg.type === "html"
+    .map((seg) => {
+      if (seg.type === "code" && seg.lang === "mermaid") {
+        hasMermaid = true;
+        return `<div class="mermaid">${escapeHtml(seg.value)}</div>`;
+      }
+      return seg.type === "code" || seg.type === "html"
         ? `<pre class="code"><code>${escapeHtml(seg.value)}</code></pre>`
-        : renderContent(seg.value)
-    )
+        : renderContent(seg.value);
+    })
     .join("\n");
-  return `<!doctype html><html><head><meta charset="utf-8"><base href="${location.origin}/"><title>${escapeHtml(
+  const mermaidScript = hasMermaid
+    ? `<script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";mermaid.initialize({startOnLoad:true,theme:"neutral"});</script>`
+    : "";
+  return `<!doctype html><html><head><meta charset="utf-8"><base href="${location.origin}/"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(
     title
   )}</title><style>
     *{box-sizing:border-box}
-    body{font:15px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#1e293b;max-width:46rem;margin:2.5rem auto;padding:0 1.5rem}
-    h1.doc-title{font-size:1.9rem;margin:0 0 1.2rem;border-bottom:2px solid #e2e8f0;padding-bottom:.5rem}
-    .md-h{font-weight:700;line-height:1.25;margin:1.2em 0 .4em}
-    h1.md-h{font-size:1.5rem}h2.md-h{font-size:1.25rem}h3.md-h{font-size:1.1rem}
+    body{font:14px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#1e293b;max-width:64rem;margin:1.5rem auto;padding:0 1.25rem}
+    h1.doc-title{font-size:1.7rem;margin:0 0 1rem;border-bottom:2px solid #e2e8f0;padding-bottom:.4rem}
+    .md-h{font-weight:700;line-height:1.25;margin:1.1em 0 .35em}
+    h1.md-h{font-size:1.35rem}h2.md-h{font-size:1.15rem}h3.md-h{font-size:1.02rem}
     blockquote{border-left:3px solid #94a3b8;padding-left:.8rem;margin:.5rem 0;color:#475569}
     li{margin-left:1.4em;list-style:disc}
     code{background:#f1f5f9;border-radius:4px;padding:0 .3em;font-family:ui-monospace,monospace;font-size:.9em}
     pre.code{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:.9rem 1rem;overflow:auto;font-size:.85em}
     pre.code code{background:none;padding:0;color:inherit}
     img.md-media{max-width:100%;border-radius:8px;margin:.5rem 0}
+    .mermaid{margin:.75rem 0;text-align:center}
     .md-table{border-collapse:collapse;margin:.6rem 0;font-size:.92em}
     .md-table th,.md-table td{border:1px solid #cbd5e1;padding:.3rem .6rem;text-align:left}
     .md-table th{background:#f1f5f9}
     a{color:#0e7490}hr{border:0;border-top:1px solid #e2e8f0;margin:1rem 0}
-    @media print{body{margin:0;max-width:none}}
-  </style></head><body><h1 class="doc-title">${escapeHtml(title)}</h1>${body}</body></html>`;
+    @media print{body{margin:0;max-width:none;font-size:12px;padding:0}
+      pre.code{font-size:.8em} img.md-media{max-height:60vh}}
+  </style></head><body><h1 class="doc-title">${escapeHtml(title)}</h1>${body}${mermaidScript}</body></html>`;
 }
 
 // Minimal text-diff so concurrent edits don't clobber each other: find the
@@ -185,6 +198,19 @@ export default function Canvas({
     URL.revokeObjectURL(url);
   }
 
+  function downloadHtml() {
+    setDlOpen(false);
+    const blob = new Blob([buildPrintHtml(title, value || "")], {
+      type: "text/html;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${slug(title)}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function downloadPdf() {
     setDlOpen(false);
     const html = buildPrintHtml(title, value || "");
@@ -193,8 +219,9 @@ export default function Canvas({
       w.document.write(html);
       w.document.close();
       w.focus();
-      // Give images/layout a moment before invoking the print → "Save as PDF".
-      setTimeout(() => w.print(), 350);
+      // Give images (and mermaid diagrams, which fetch their renderer) a
+      // moment before invoking the print → "Save as PDF".
+      setTimeout(() => w.print(), value.includes("```mermaid") ? 1400 : 350);
       return;
     }
     // iOS standalone PWAs block window.open — open the printable page via a
@@ -346,6 +373,12 @@ export default function Canvas({
                   onClick={downloadMarkdown}
                 >
                   <FileDown size={15} /> Download .md
+                </button>
+                <button
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--c-elevated)]"
+                  onClick={downloadHtml}
+                >
+                  <FileCode2 size={15} /> Download HTML
                 </button>
                 <button
                   className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--c-elevated)]"
