@@ -7,7 +7,9 @@ self-hostable, Slack-like room that ships as a single Docker container.
 
 - **Backend** — FastAPI (uvicorn), SQLite (WAL) + files on disk. Serves a REST
   API, a presence/message **WebSocket** (`/ws`), a **Yjs collaboration relay**
-  (`/collab/{doc}`), Web Push, and the built SPA as static files.
+  (`/collab/{doc}`), Web Push, and the built SPA as static files. Python deps are
+  managed by **uv** (`backend/pyproject.toml` + `backend/uv.lock`) — no
+  `requirements.txt`; add a dep with `uv add`, run locally with `uv run …`.
 - **Frontend** — React 18 + Vite + TypeScript + Tailwind v4 + Zustand, plus Yjs
   for the collaborative canvas/whiteboard. PWA (service worker + manifest).
 - **One container.** Multi-stage Docker builds the SPA, then FastAPI serves it

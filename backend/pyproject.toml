@@ -1,0 +1,23 @@
+[project]
+name = "conventus"
+version = "0.1.0"
+description = "Conventus — a self-hosted, single-container chat room (FastAPI backend)."
+requires-python = ">=3.12"
+# Direct dependencies are pinned to the versions the project already shipped;
+# uv.lock pins the full transitive graph for reproducible builds. Run
+# `uv lock --upgrade` to move them forward deliberately.
+dependencies = [
+    "fastapi==0.115.6",
+    "uvicorn[standard]==0.34.0",
+    "python-multipart==0.0.20",
+    "httpx==0.28.1",
+    "itsdangerous==2.2.0",
+    "beautifulsoup4==4.12.3",
+    "pywebpush==2.0.3",
+    "pycrdt==0.14.1",
+]
+
+[tool.uv]
+# The app runs from its source tree (uvicorn app.main:app); it is not built or
+# installed as a package, so uv should only manage the dependencies.
+package = false

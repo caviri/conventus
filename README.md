@@ -125,10 +125,9 @@ All via environment variables (see `.env.example`):
 Two terminals (hot reload for both):
 
 ```bash
-# backend
+# backend (uv manages the venv from pyproject.toml + uv.lock)
 cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 7860
+uv run uvicorn app.main:app --reload --port 7860
 
 # frontend (proxies /api and /ws to :7860)
 cd frontend

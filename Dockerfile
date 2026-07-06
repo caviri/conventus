@@ -14,12 +14,20 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     DATA_DIR=/data \
     STATIC_DIR=/app/static \
-    PORT=7860
+    PORT=7860 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PATH="/app/.venv/bin:$PATH"
 
 WORKDIR /app
 
-COPY backend/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# uv binary (pinned) for fast, fully-locked dependency installs.
+COPY --from=ghcr.io/astral-sh/uv:0.11.19 /uv /usr/local/bin/uv
+
+# Install the locked dependencies into /app/.venv. Cached unless the lock or
+# manifest change; the venv is on PATH so `uvicorn` below resolves from it.
+COPY backend/pyproject.toml backend/uv.lock ./
+RUN uv sync --frozen --no-dev
 
 COPY backend/app ./app
 COPY --from=frontend /frontend/dist ./static
