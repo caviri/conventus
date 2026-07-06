@@ -66,6 +66,16 @@ export const api = {
     });
   },
 
+  async uploadEmoji(name: string, file: File) {
+    const form = new FormData();
+    form.append("name", name);
+    form.append("file", file);
+    return request<import("./types").CustomEmoji>("/api/emojis", {
+      method: "POST",
+      body: form,
+    });
+  },
+
   async exportRoom(): Promise<Blob> {
     const res = await fetch("/api/admin/export", {
       method: "POST",

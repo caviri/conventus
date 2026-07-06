@@ -30,6 +30,7 @@ DEFAULT_PREFS: dict[str, bool] = {
     "mentions": True,
     "replies": True,
     "dms": True,
+    "reactions": True,
     "all_channel": False,
 }
 

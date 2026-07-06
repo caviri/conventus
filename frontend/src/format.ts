@@ -75,6 +75,21 @@ const URL_RE = /(https?:\/\/[^\s<]+)/g;
 // Null-char sentinel: never present in user text and untouched by escaping.
 const SENTINEL = String.fromCharCode(0);
 
+// --- Custom emoji ----------------------------------------------------------
+// The store refreshes this map from /api/emojis; renderContent swaps known
+// :name: tokens for inline images. Module-level so the render path stays a
+// pure string → string function.
+
+let customEmojiMap: Record<string, string> = {};
+
+export function setCustomEmojis(list: { name: string; url: string }[]) {
+  customEmojiMap = Object.fromEntries(list.map((e) => [e.name, e.url]));
+}
+
+export function customEmojiUrl(name: string): string | undefined {
+  return customEmojiMap[name];
+}
+
 // --- Markdown tables ------------------------------------------------------
 
 const SEP_RE = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
@@ -199,6 +214,13 @@ export function renderContent(text: string): string {
     /(^|\s)#([\w][\w.\-]*)/g,
     '$1<a class="hashtag" data-channel="$2">#$2</a>'
   );
+  // :custom_emoji: → inline image. Only names the room actually has are
+  // swapped; anything else (":30:" in a timestamp, unknown codes) stays text.
+  work = work.replace(/:([a-z0-9_+\-]{1,64}):/g, (m, name) => {
+    const url = customEmojiMap[name];
+    if (!url) return m;
+    return `<img class="inline-emoji" src="${escapeAttr(url)}" alt=":${name}:" title=":${name}:"/>`;
+  });
 
   // Newlines → <br/>, but not directly after a block-level element.
   work = work.replace(/\n/g, "<br/>");

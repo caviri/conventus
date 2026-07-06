@@ -22,7 +22,7 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 TABLES = [
     "users", "folders", "channels", "boards", "games", "dms",
-    "messages", "reactions", "files", "bots",
+    "messages", "reactions", "files", "custom_emojis", "bots",
 ]
 
 
