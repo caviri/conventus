@@ -97,6 +97,16 @@ CREATE TABLE IF NOT EXISTS files (
     created_at    REAL NOT NULL
 );
 
+-- Room-wide custom emoji (Slack-mojis): a name like :partyparrot: pointing at
+-- an uploaded image. The bytes live as a normal files row so export/import and
+-- disk handling come for free; Drive listings filter these out.
+CREATE TABLE IF NOT EXISTS custom_emojis (
+    name        TEXT PRIMARY KEY,
+    file_id     TEXT NOT NULL,
+    uploaded_by TEXT NOT NULL,
+    created_at  REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS push_subscriptions (
     endpoint    TEXT PRIMARY KEY,
     author      TEXT NOT NULL,

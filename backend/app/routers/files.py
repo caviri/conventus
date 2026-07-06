@@ -50,21 +50,25 @@ def _serialize(row: dict) -> dict:
     }
 
 
-@router.post("")
-async def upload(file: UploadFile = File(...), user=Depends(current_user)):
+async def save_upload(
+    file: UploadFile, user: dict, max_bytes: int | None = None, limit_label: str = ""
+) -> dict:
+    """Stream an upload to FILES_DIR and record its files row (shared with
+    custom emoji uploads, which use a much smaller size cap)."""
     config.ensure_dirs()
+    cap = max_bytes or config.MAX_UPLOAD_BYTES
     file_id = uuid.uuid4().hex
     dest = _path_for(file_id)
     size = 0
     with dest.open("wb") as out:
         while chunk := await file.read(1024 * 1024):
             size += len(chunk)
-            if size > config.MAX_UPLOAD_BYTES:
+            if size > cap:
                 out.close()
                 dest.unlink(missing_ok=True)
                 raise HTTPException(
                     status_code=413,
-                    detail=f"File exceeds {config.MAX_UPLOAD_MB} MB limit",
+                    detail=f"File exceeds {limit_label or f'{config.MAX_UPLOAD_MB} MB'} limit",
                 )
             out.write(chunk)
 
@@ -82,13 +86,22 @@ async def upload(file: UploadFile = File(...), user=Depends(current_user)):
         "VALUES (?, ?, ?, ?, ?, ?)",
         (file_id, file.filename or "file", mime, size, user["name"], db.now()),
     )
-    row = db.query_one("SELECT * FROM files WHERE id = ?", (file_id,))
-    return _serialize(row)
+    return db.query_one("SELECT * FROM files WHERE id = ?", (file_id,))
+
+
+@router.post("")
+async def upload(file: UploadFile = File(...), user=Depends(current_user)):
+    return _serialize(await save_upload(file, user))
 
 
 @router.get("")
 async def list_files(user=Depends(current_user)):
-    rows = db.query_all("SELECT * FROM files ORDER BY created_at DESC")
+    # Custom emoji images are backing assets, not Drive content.
+    rows = db.query_all(
+        "SELECT * FROM files "
+        "WHERE id NOT IN (SELECT file_id FROM custom_emojis) "
+        "ORDER BY created_at DESC"
+    )
     return [_serialize(r) for r in rows]
 
 
@@ -116,6 +129,12 @@ async def delete_file(file_id: str, user=Depends(current_user)):
         raise HTTPException(status_code=404, detail="File not found")
     if row["uploaded_by"] != user["name"] and not user.get("is_admin"):
         raise HTTPException(status_code=403, detail="Not allowed")
+    emoji = db.query_one("SELECT name FROM custom_emojis WHERE file_id = ?", (file_id,))
+    if emoji:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File is in use by the custom emoji :{emoji['name']}: — delete that instead",
+        )
     _path_for(file_id).unlink(missing_ok=True)
     db.execute("DELETE FROM files WHERE id = ?", (file_id,))
     return {"ok": True}

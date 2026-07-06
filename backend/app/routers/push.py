@@ -22,6 +22,7 @@ class NotifyPrefs(BaseModel):
     mentions: bool = True
     replies: bool = True
     dms: bool = True
+    reactions: bool = True
     all_channel: bool = False
 
 

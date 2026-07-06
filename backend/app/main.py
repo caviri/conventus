@@ -28,6 +28,7 @@ from .routers import (
     channels,
     conversations,
     dms,
+    emojis,
     files,
     folders,
     games,
@@ -75,6 +76,7 @@ TAGS_METADATA = [
     {"name": "boards", "description": "Collaborative canvases and whiteboards."},
     {"name": "games", "description": "Game boards: draft together, publish, play (bingo)."},
     {"name": "files", "description": "File uploads and the ephemeral Drive."},
+    {"name": "emojis", "description": "Custom emoji: upload once, react everywhere."},
     {"name": "bots", "description": "OpenAI-compatible channel bots (admin)."},
     {"name": "agent", "description": "The room Assistant: config, private conversations, completion."},
     {"name": "push", "description": "Web Push subscription management."},
@@ -109,6 +111,7 @@ app.include_router(boards.router)
 app.include_router(games.router)
 app.include_router(folders.router)
 app.include_router(files.router)
+app.include_router(emojis.router)
 app.include_router(bots.router)
 app.include_router(agent.router)
 app.include_router(conversations.router)
