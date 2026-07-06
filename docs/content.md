@@ -34,6 +34,7 @@ container and it's gone.
 ### 💬 Chat
 - **Channels + DMs** in realtime over WebSockets, with presence and typing indicators.
 - **Rich messages** — edit, delete, **emoji reactions**, **quote-replies**, **pinned messages**, **permalinks**, and **date dividers**.
+- **Custom emoji** — upload a PNG/GIF/WebP, name it `:like_this:`, and the whole room can react with it or drop it inline in messages.
 - **Slash commands** with an autocomplete palette: `/me`, `/shrug`, `/tableflip`, `/poll`, `/dm`, `/theme`, `/topic`, `/help`, …
 - **Message search** across channels and your DMs (`⌘/Ctrl-K`).
 - **Custom avatars & status** — set an emoji/image avatar and a status line.
@@ -466,7 +467,7 @@ Use the admin password in the same `"password"` field to get an **admin** token
 | `GET    /api/channels/{id}/pins`       | Pinned messages                       |
 | `PATCH  /api/messages/{id}`            | Edit own message `{content}`          |
 | `DELETE /api/messages/{id}`            | Author or admin                       |
-| `POST   /api/messages/{id}/reactions`  | Toggle `{emoji}`                      |
+| `POST   /api/messages/{id}/reactions`  | Toggle `{emoji}` — a unicode char or a `:custom_emoji:` shortcode |
 | `POST   /api/messages/{id}/pin`        | Toggle pinned                         |
 
 **DMs**
@@ -496,9 +497,17 @@ Use the admin password in the same `"password"` field to get an **admin** token
 | `POST /api/boards/{id}/append`   | Live document: append `{text}`                |
 | `POST /api/boards/{id}/features` | Map: add an annotation `{kind: pin·path·draw·text·image, coords, label?, color?, size?, url?}` — live viewers see it instantly |
 | `POST /api/files`              | multipart `file=` → metadata                  |
-| `GET  /api/files`              | The Drive listing                             |
+| `GET  /api/files`              | The Drive listing (custom-emoji images excluded) |
 | `GET  /api/files/{id}/raw`     | Stream a file (`?download=true` to download)  |
-| `DELETE /api/files/{id}`       | Uploader or admin                             |
+| `DELETE /api/files/{id}`       | Uploader or admin (refused if the file backs an emoji) |
+
+**Custom emoji** (Slack-mojis — usable in reactions and inline as `:name:`)
+
+| Method & path                  | Body / notes                                  |
+| ------------------------------ | --------------------------------------------- |
+| `GET  /api/emojis`             | List `{name, url, uploaded_by, created_at}`   |
+| `POST /api/emojis`             | multipart `name=` + `file=` (PNG/GIF/WebP/JPEG, ≤ 512 KB); name is `a-z 0-9 _ - +`, ≤ 32 chars |
+| `DELETE /api/emojis/{name}`    | Uploader or admin                             |
 
 **Games** (boards of kind `game`; the host is the board's creator or an admin)
 
@@ -524,7 +533,7 @@ Use the admin password in the same `"password"` field to get an **admin** token
 | `POST /api/push/subscribe`     | `{subscription}`                              |
 | `POST /api/push/unsubscribe`   | `{endpoint}`                                  |
 | `GET  /api/push/prefs`         | Your push preferences                         |
-| `PUT  /api/push/prefs`         | `{mentions, replies, dms, all_channel}`       |
+| `PUT  /api/push/prefs`         | `{mentions, replies, dms, reactions, all_channel}` |
 | `POST /api/admin/reserve` 🔒   | `{name, password, is_admin?}`                 |
 | `DELETE /api/admin/members/{name}` 🔒 | Remove a member                        |
 | `POST /api/admin/export` 🔒    | Download the room as a zip. Bot API keys are **stripped by default**; add `?include_secrets=true` for a full backup (the zip then holds usable plaintext keys — guard it) |

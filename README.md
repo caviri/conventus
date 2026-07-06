@@ -47,6 +47,7 @@ delete it.
 - 🔑 **One name + one password.** People pick a name and enter the room password, admin password, or a reserved-name password. No accounts, no email.
 - 💬 **Channels + DMs** in realtime over WebSockets, with presence and typing indicators.
 - ✍️ **Rich messages** — edit, delete, **emoji reactions**, **quote-replies**, **pinned messages**, **permalinks**, and `/slash` commands (`/me`, `/shrug`, `/poll`, `/dm`, `/theme`, `/topic`, `/help`, …) with an autocomplete palette.
+- 😀 **Custom emoji** — upload a PNG/GIF/WebP, name it `:like_this:`, and the whole room can react with it or use it inline (a searchable picker plus `:` autocomplete in the composer).
 - 🔎 **Message search** across channels and your DMs (⌘/Ctrl-K), and date dividers.
 - 🖋️ **Markdown** — headings, lists, blockquotes, **tables**, syntax-highlighted **code blocks**, and sandboxed **HTML widgets**.
 - 🙋 **Presence + status** — set a status (emoji + text); reserved names; admins manage channel settings, members and bots.
