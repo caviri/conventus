@@ -135,6 +135,15 @@ export default function Settings() {
   const [emojiName, setEmojiName] = useState("");
   const [emojiFile, setEmojiFile] = useState<File | null>(null);
   const [emojiBusy, setEmojiBusy] = useState(false);
+  // A staged file's object URL, revoked when the file changes or unmounts so
+  // repeated renders don't leak blobs.
+  const [emojiPreview, setEmojiPreview] = useState<string | null>(null);
+  useEffect(() => {
+    if (!emojiFile) return setEmojiPreview(null);
+    const url = URL.createObjectURL(emojiFile);
+    setEmojiPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [emojiFile]);
 
   function pickEmojiFile(f: File | undefined) {
     if (!f) return;
@@ -517,9 +526,9 @@ export default function Settings() {
             )}
             <div className="flex flex-wrap items-center gap-2">
               <button className="btn" onClick={() => emojiFileRef.current?.click()}>
-                {emojiFile ? (
+                {emojiFile && emojiPreview ? (
                   <img
-                    src={URL.createObjectURL(emojiFile)}
+                    src={emojiPreview}
                     alt=""
                     className="h-5 w-5 object-contain"
                   />

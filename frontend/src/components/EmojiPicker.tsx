@@ -33,6 +33,7 @@ export default function EmojiPicker({
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [newFile, setNewFile] = useState<File | null>(null);
+  const [newPreview, setNewPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -40,6 +41,14 @@ export default function EmojiPicker({
   useEffect(() => {
     loadEmojiData().then(() => setReady(true));
   }, []);
+
+  // Object URL for the staged file, revoked on change/unmount so we don't leak.
+  useEffect(() => {
+    if (!newFile) return setNewPreview(null);
+    const url = URL.createObjectURL(newFile);
+    setNewPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [newFile]);
 
   // Close on outside press or Escape.
   useEffect(() => {
@@ -289,8 +298,8 @@ export default function EmojiPicker({
               onClick={() => fileRef.current?.click()}
               title="Choose a PNG, GIF or WebP (max 512 KB)"
             >
-              {newFile ? (
-                <img src={URL.createObjectURL(newFile)} alt="" className="h-5 w-5 object-contain" />
+              {newFile && newPreview ? (
+                <img src={newPreview} alt="" className="h-5 w-5 object-contain" />
               ) : (
                 "Image…"
               )}

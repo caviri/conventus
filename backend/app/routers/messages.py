@@ -14,8 +14,9 @@ from ..deps import current_user
 
 router = APIRouter(prefix="/api/messages", tags=["messages"])
 
-# A reaction is either a unicode emoji or a :custom_emoji: shortcode.
-CUSTOM_EMOJI_RE = re.compile(r"^:([a-z0-9_+\-]{1,64}):$")
+# A reaction is either a unicode emoji or a :custom_emoji: shortcode. The name
+# bound matches emojis.NAME_RE (1-32 chars) so a valid shortcode can resolve.
+CUSTOM_EMOJI_RE = re.compile(r"^:([a-z0-9_+\-]{1,32}):$")
 
 
 class EditRequest(BaseModel):

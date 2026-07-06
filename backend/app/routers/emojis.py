@@ -7,6 +7,7 @@ so export/import and disk cleanup follow the existing file machinery.
 from __future__ import annotations
 
 import re
+import sqlite3
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
@@ -57,11 +58,18 @@ async def create_emoji(
             status_code=400, detail="Emoji must be a PNG, GIF, WebP or JPEG image"
         )
     row = await save_upload(file, user, max_bytes=MAX_EMOJI_BYTES, limit_label="512 KB")
-    db.execute(
-        "INSERT INTO custom_emojis(name, file_id, uploaded_by, created_at) "
-        "VALUES (?, ?, ?, ?)",
-        (name, row["id"], user["name"], db.now()),
-    )
+    try:
+        db.execute(
+            "INSERT INTO custom_emojis(name, file_id, uploaded_by, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            (name, row["id"], user["name"], db.now()),
+        )
+    except sqlite3.IntegrityError:
+        # Lost a race to another uploader claiming this name: drop the file we
+        # just saved so it doesn't linger on disk and leak into the Drive.
+        _path_for(row["id"]).unlink(missing_ok=True)
+        db.execute("DELETE FROM files WHERE id = ?", (row["id"],))
+        raise HTTPException(status_code=400, detail=f":{name}: already exists")
     emoji = db.query_one("SELECT * FROM custom_emojis WHERE name = ?", (name,))
     await hub.broadcast("emoji.update", {"action": "add", "name": name})
     return _serialize(emoji)
