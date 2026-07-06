@@ -1,14 +1,23 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { useStore } from "../store";
 import { sendTyping } from "../ws";
 import { matchCommands, runCommand, type CommandContext } from "../commands";
 import MediaCapture from "./MediaCapture";
+import EmojiPicker, { type EmojiPick } from "./EmojiPicker";
+import { loadEmojiData, searchEmoji } from "../emojiData";
 import type { FileItem, View } from "../types";
 import { formatBytes } from "../format";
-import { Paperclip, SendHorizontal, X, Loader2, Code2, Hash } from "lucide-react";
+import { Paperclip, SendHorizontal, X, Loader2, Code2, Hash, Smile } from "lucide-react";
 
-type TagItem = { sigil: "@" | "#"; name: string; color?: string; sub?: string };
+type TagItem = {
+  sigil: "@" | "#" | ":";
+  name: string;
+  color?: string;
+  sub?: string;
+  emojiChar?: string; // ":" items — a unicode emoji…
+  imgUrl?: string; // …or a custom emoji image
+};
 
 export default function Composer({
   view,
@@ -24,10 +33,13 @@ export default function Composer({
   const [widgetMode, setWidgetMode] = useState(false);
   const [paletteIndex, setPaletteIndex] = useState(0);
   const [paletteClosed, setPaletteClosed] = useState(false);
-  // Tag autocomplete: "@" people/bots, "#" channels.
-  const [tag, setTag] = useState<{ sigil: "@" | "#"; query: string } | null>(null);
+  // Tag autocomplete: "@" people/bots, "#" channels, ":" emoji.
+  const [tag, setTag] = useState<{ sigil: "@" | "#" | ":"; query: string } | null>(null);
   const [tagIndex, setTagIndex] = useState(0);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [emojiReady, setEmojiReady] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const emojiBtnRef = useRef<HTMLButtonElement>(null);
   const lastTyping = useRef(0);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const hlRef = useRef<HTMLDivElement>(null);
@@ -36,6 +48,15 @@ export default function Composer({
   const members = useStore((s) => s.members);
   const channels = useStore((s) => s.channels);
   const bots = useStore((s) => s.bots);
+  const emojis = useStore((s) => s.emojis);
+
+  // The unicode catalog is a lazy chunk — fetch it the first time a ":" token
+  // shows up so suggestions appear as soon as it lands.
+  useEffect(() => {
+    if (tag?.sigil === ":" && !emojiReady) {
+      loadEmojiData().then(() => setEmojiReady(true));
+    }
+  }, [tag?.sigil, emojiReady]);
   const openDm = useStore((s) => s.openDm);
   const refreshChannels = useStore((s) => s.refreshChannels);
   const addLocalMessage = useStore((s) => s.addLocalMessage);
@@ -68,6 +89,19 @@ export default function Composer({
       const [br, bn] = rank(b.name);
       return ar - br || an.localeCompare(bn);
     };
+    if (tag.sigil === ":") {
+      const custom: TagItem[] = emojis
+        .filter((e) => e.name.includes(q))
+        .map((e) => ({ sigil: ":" as const, name: e.name, imgUrl: e.url, sub: "custom" }))
+        .sort(byRank);
+      const native: TagItem[] = (emojiReady ? searchEmoji(q, 8) : []).map((e) => ({
+        sigil: ":" as const,
+        name: e.shortcodes[0] || e.label.toLowerCase().replace(/[^a-z0-9]+/g, "_"),
+        emojiChar: e.unicode,
+        sub: e.label,
+      }));
+      return [...custom, ...native].slice(0, 6);
+    }
     if (tag.sigil === "#") {
       return channels
         .filter((c) => c.name.toLowerCase().includes(q))
@@ -89,7 +123,7 @@ export default function Composer({
       if (b.enabled && !seen.has(b.name.toLowerCase()))
         items.push({ sigil: "@", name: b.name, color: b.color, sub: "bot" });
     return items.filter((it) => it.name.toLowerCase().includes(q)).sort(byRank).slice(0, 6);
-  }, [tag, members, channels, bots]);
+  }, [tag, members, channels, bots, emojis, emojiReady]);
   const showTags = !widgetMode && tagMatches.length > 0;
 
   // --- Live highlighting of @mentions, #channels and /commands as you type.
@@ -175,14 +209,22 @@ export default function Composer({
     taRef.current?.focus();
   }
 
-  // Replace the half-typed "@query" / "#query" before the caret with the pick.
+  // Replace the half-typed "@query" / "#query" / ":query" before the caret
+  // with the pick. Unicode emoji insert the actual character; custom emoji
+  // stay a :name: token (rendered as an image).
   function completeTag(item: TagItem) {
     const ta = taRef.current;
     if (!ta) return;
     const pos = ta.selectionStart ?? text.length;
+    const replacement =
+      item.sigil === ":"
+        ? item.emojiChar
+          ? `${item.emojiChar} `
+          : `:${item.name}: `
+        : `${item.sigil}${item.name} `;
     const before = text
       .slice(0, pos)
-      .replace(/([@#])([^\s@#]*)$/, `${item.sigil}${item.name} `);
+      .replace(item.sigil === ":" ? /:([a-z0-9_+\-]*)$/ : /([@#])([^\s@#]*)$/, replacement);
     const after = text.slice(pos);
     const next = before + after;
     setText(next);
@@ -275,6 +317,21 @@ export default function Composer({
     }
   }
 
+  // Drop a picked emoji at the caret: the actual character for unicode,
+  // a :name: token for custom (rendered as an image once sent).
+  function insertEmoji(p: EmojiPick) {
+    setEmojiOpen(false);
+    const token = p.native ?? `:${p.custom}:`;
+    const ta = taRef.current;
+    const pos = ta?.selectionStart ?? text.length;
+    setText(text.slice(0, pos) + token + text.slice(pos));
+    requestAnimationFrame(() => {
+      if (!ta) return;
+      ta.focus();
+      ta.selectionStart = ta.selectionEnd = pos + token.length;
+    });
+  }
+
   // Post a recorded audio/video clip as its own message right away.
   async function sendMedia(f: FileItem) {
     await api.post(endpoint, {
@@ -341,10 +398,16 @@ export default function Composer({
     setPaletteIndex(0);
     setPaletteClosed(false);
     const ta = e.target;
-    // Detect an @mention or #channel tag being typed at the caret.
+    // Detect an @mention, #channel or :emoji token being typed at the caret
+    // (emoji wait for 2 chars so a plain colon doesn't pop the list).
     const pos = ta.selectionStart ?? ta.value.length;
     const m = ta.value.slice(0, pos).match(/(?:^|\s)([@#])([^\s@#]*)$/);
-    setTag(m ? { sigil: m[1] as "@" | "#", query: m[2] } : null);
+    if (m) {
+      setTag({ sigil: m[1] as "@" | "#", query: m[2] });
+    } else {
+      const em = ta.value.slice(0, pos).match(/(?:^|\s):([a-z0-9_+\-]{2,})$/);
+      setTag(em ? { sigil: ":", query: em[1] } : null);
+    }
     setTagIndex(0);
     ta.style.height = "auto";
     ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
@@ -402,7 +465,8 @@ export default function Composer({
       {showTags && (
         <div className="card mb-2 overflow-hidden p-1 fade-in">
           <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--c-muted)]">
-            {tag?.sigil === "#" ? "Channel" : "Mention"} — ↑/↓ to navigate, Tab to insert
+            {tag?.sigil === "#" ? "Channel" : tag?.sigil === ":" ? "Emoji" : "Mention"} — ↑/↓ to
+            navigate, Tab to insert
           </div>
           {tagMatches.map((m, i) => (
             <button
@@ -415,6 +479,12 @@ export default function Composer({
             >
               {m.sigil === "#" ? (
                 <Hash size={13} className="shrink-0 text-[var(--c-muted)]" />
+              ) : m.sigil === ":" ? (
+                m.imgUrl ? (
+                  <img src={m.imgUrl} alt="" className="h-5 w-5 shrink-0 object-contain" />
+                ) : (
+                  <span className="shrink-0 text-base leading-none">{m.emojiChar}</span>
+                )
               ) : (
                 <span
                   className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
@@ -422,8 +492,7 @@ export default function Composer({
                 />
               )}
               <span className="font-medium">
-                {m.sigil}
-                {m.name}
+                {m.sigil === ":" ? `:${m.name}:` : `${m.sigil}${m.name}`}
               </span>
               {m.sub && (
                 <span
@@ -509,6 +578,25 @@ export default function Composer({
           >
             <Code2 size={18} />
           </button>
+          <button
+            ref={emojiBtnRef}
+            className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg transition hover:bg-[var(--c-elevated)] ${
+              emojiOpen
+                ? "text-[var(--c-accent)]"
+                : "text-[var(--c-muted)] hover:text-[var(--c-text)]"
+            }`}
+            onClick={() => setEmojiOpen((v) => !v)}
+            title="Emoji"
+          >
+            <Smile size={18} />
+          </button>
+          {emojiOpen && (
+            <EmojiPicker
+              anchor={emojiBtnRef.current}
+              onClose={() => setEmojiOpen(false)}
+              onPick={insertEmoji}
+            />
+          )}
           <MediaCapture onSend={sendMedia} />
           <div className="relative min-w-0 flex-1">
             {highlighted !== null && (

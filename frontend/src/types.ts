@@ -52,6 +52,14 @@ export interface Reaction {
   users: string[];
 }
 
+// A room-wide custom emoji (Slack-moji): used as :name: in reactions and text.
+export interface CustomEmoji {
+  name: string;
+  url: string;
+  uploaded_by: string;
+  created_at: number;
+}
+
 export interface ReplyPreview {
   id: number;
   author: string;

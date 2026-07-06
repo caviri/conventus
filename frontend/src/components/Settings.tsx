@@ -29,6 +29,9 @@ import {
   Lock,
   Unlock,
   Dices,
+  Loader2,
+  Smile,
+  Trash2,
   Map as MapIcon,
 } from "lucide-react";
 import { getMapStyleOverride, saveMapStyleOverride } from "../mapstyle";
@@ -107,7 +110,13 @@ export default function Settings() {
   useEffect(() => onInstallChange(() => setInstallable(canInstall())), []);
 
   // Per-user push preferences (stored server-side; they filter deliveries).
-  type NotifyPrefs = { mentions: boolean; replies: boolean; dms: boolean; all_channel: boolean };
+  type NotifyPrefs = {
+    mentions: boolean;
+    replies: boolean;
+    dms: boolean;
+    reactions: boolean;
+    all_channel: boolean;
+  };
   const [prefs, setPrefs] = useState<NotifyPrefs | null>(null);
   useEffect(() => {
     api.get<NotifyPrefs>("/api/push/prefs").then(setPrefs).catch(() => {});
@@ -117,6 +126,55 @@ export default function Settings() {
     const next = { ...prefs, [key]: !prefs[key] };
     setPrefs(next);
     api.put("/api/push/prefs", next).catch(() => {});
+  }
+
+  // Room-wide custom emoji: anyone can add; delete your own (admins any).
+  const emojis = useStore((s) => s.emojis);
+  const refreshEmojis = useStore((s) => s.refreshEmojis);
+  const emojiFileRef = useRef<HTMLInputElement>(null);
+  const [emojiName, setEmojiName] = useState("");
+  const [emojiFile, setEmojiFile] = useState<File | null>(null);
+  const [emojiBusy, setEmojiBusy] = useState(false);
+
+  function pickEmojiFile(f: File | undefined) {
+    if (!f) return;
+    setEmojiFile(f);
+    if (!emojiName) {
+      setEmojiName(
+        f.name
+          .replace(/\.[^.]+$/, "")
+          .toLowerCase()
+          .replace(/[^a-z0-9_+-]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .slice(0, 32)
+      );
+    }
+  }
+
+  async function addEmoji() {
+    if (!emojiFile || !emojiName.trim() || emojiBusy) return;
+    setEmojiBusy(true);
+    try {
+      await api.uploadEmoji(emojiName.trim(), emojiFile);
+      await refreshEmojis();
+      setEmojiName("");
+      setEmojiFile(null);
+      if (emojiFileRef.current) emojiFileRef.current.value = "";
+    } catch (e: any) {
+      alert(e.message || "Could not add emoji");
+    } finally {
+      setEmojiBusy(false);
+    }
+  }
+
+  async function removeEmoji(name: string) {
+    if (!confirm(`Delete :${name}: for the whole room?`)) return;
+    try {
+      await api.del(`/api/emojis/${name}`);
+      await refreshEmojis();
+    } catch (e: any) {
+      alert(e.message || "Could not delete emoji");
+    }
   }
 
   useEffect(() => {
@@ -403,6 +461,7 @@ export default function Settings() {
                     ["mentions", "@mentions"],
                     ["replies", "Replies to my messages"],
                     ["dms", "Direct messages"],
+                    ["reactions", "Reactions to my messages"],
                     ["all_channel", "Every channel message (noisy)"],
                   ] as const
                 ).map(([key, label]) => (
@@ -417,6 +476,80 @@ export default function Settings() {
                 ))}
               </div>
             )}
+          </section>
+
+          <section className="card p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <Smile size={16} className="text-[var(--c-accent)]" />
+              <h2 className="font-semibold">Custom emoji</h2>
+            </div>
+            <p className="mb-3 text-sm text-[var(--c-muted)]">
+              Give the room its own emoji — a PNG, GIF or WebP up to 512 KB.
+              Everyone can use them in reactions and messages as{" "}
+              <code>:name:</code>. You can delete the ones you added
+              {user?.is_admin ? " (as admin: any of them)" : ""}.
+            </p>
+            {emojis.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-2">
+                {emojis.map((e) => {
+                  const canRemove = user?.is_admin || e.uploaded_by === user?.name;
+                  return (
+                    <div
+                      key={e.name}
+                      title={`:${e.name}: — added by ${e.uploaded_by}`}
+                      className="flex items-center gap-1.5 rounded-lg border border-[var(--c-border)] bg-[var(--c-elevated)] px-2 py-1"
+                    >
+                      <img src={e.url} alt={`:${e.name}:`} className="h-6 w-6 object-contain" />
+                      <span className="font-mono text-xs">:{e.name}:</span>
+                      {canRemove && (
+                        <button
+                          onClick={() => removeEmoji(e.name)}
+                          className="text-[var(--c-muted)] hover:text-red-300"
+                          title={`Delete :${e.name}:`}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <button className="btn" onClick={() => emojiFileRef.current?.click()}>
+                {emojiFile ? (
+                  <img
+                    src={URL.createObjectURL(emojiFile)}
+                    alt=""
+                    className="h-5 w-5 object-contain"
+                  />
+                ) : (
+                  <Upload size={16} />
+                )}
+                {emojiFile ? emojiFile.name : "Choose image"}
+              </button>
+              <input
+                ref={emojiFileRef}
+                type="file"
+                accept="image/png,image/gif,image/webp,image/jpeg"
+                className="hidden"
+                onChange={(e) => pickEmojiFile(e.target.files?.[0])}
+              />
+              <input
+                value={emojiName}
+                onChange={(e) => setEmojiName(e.target.value.toLowerCase())}
+                onKeyDown={(e) => e.key === "Enter" && addEmoji()}
+                placeholder="name (a-z, 0-9, -, _)"
+                className="input !w-52 font-mono text-sm"
+              />
+              <button
+                className="btn btn-primary"
+                disabled={!emojiFile || !emojiName.trim() || emojiBusy}
+                onClick={addEmoji}
+              >
+                {emojiBusy ? <Loader2 size={16} className="animate-spin" /> : "Add emoji"}
+              </button>
+            </div>
           </section>
 
           <section className="card p-4">

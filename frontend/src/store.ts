@@ -1,12 +1,14 @@
 import { create } from "zustand";
 import { api, getToken, setToken } from "./api";
 import { notifyMention } from "./notifications";
+import { setCustomEmojis } from "./format";
 import type {
   AgentConfig,
   Board,
   Bot,
   Channel,
   Conversation,
+  CustomEmoji,
   DM,
   FileItem,
   Folder,
@@ -49,6 +51,7 @@ interface State {
   boards: Board[];
   folders: Folder[];
   files: FileItem[];
+  emojis: CustomEmoji[];
   games: Record<number, GameState>;
   view: View;
   messages: Record<string, Message[]>;
@@ -82,6 +85,7 @@ interface State {
   refreshFolders: () => Promise<void>;
   moveToFolder: (kind: "channel" | "board", id: number, folderId: number | null) => Promise<void>;
   refreshFiles: () => Promise<void>;
+  refreshEmojis: () => Promise<void>;
   openDm: (name: string) => Promise<void>;
   addLocalMessage: (content: string, kind?: "system" | "bot") => void;
   setReplyTarget: (m: Message | null) => void;
@@ -109,6 +113,7 @@ export const useStore = create<State>((set, get) => ({
   boards: [],
   folders: [],
   files: [],
+  emojis: [],
   games: {},
   view: { type: "channel", id: 0 },
   messages: {},
@@ -138,6 +143,7 @@ export const useStore = create<State>((set, get) => ({
         get().refreshBoards(),
         get().refreshFolders(),
         get().refreshBots(),
+        get().refreshEmojis(),
       ]);
       const first = get().channels[0];
       if (first) await get().setView({ type: "channel", id: first.id });
@@ -159,6 +165,7 @@ export const useStore = create<State>((set, get) => ({
       get().refreshMembers(),
       get().refreshBoards(),
       get().refreshFolders(),
+      get().refreshEmojis(),
     ]);
     const first = get().channels[0];
     if (first) await get().setView({ type: "channel", id: first.id });
@@ -281,6 +288,11 @@ export const useStore = create<State>((set, get) => ({
   },
   async refreshFiles() {
     set({ files: await api.get<FileItem[]>("/api/files") });
+  },
+  async refreshEmojis() {
+    const emojis = await api.get<CustomEmoji[]>("/api/emojis");
+    setCustomEmojis(emojis); // keep renderContent's :name: map in sync
+    set({ emojis });
   },
 
   async openDm(name) {
@@ -460,6 +472,9 @@ export const useStore = create<State>((set, get) => ({
       case "member.remove":
       case "member.update":
         get().refreshMembers();
+        break;
+      case "emoji.update":
+        get().refreshEmojis();
         break;
       case "typing": {
         const key = data.channel_id

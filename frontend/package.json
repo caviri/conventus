@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "emojibase-data": "^16.0.0",
     "highlight.js": "^11.10.0",
     "maplibre-gl": "^5.0.0",
     "mermaid": "^11.4.0",

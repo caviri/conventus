@@ -1,6 +1,6 @@
-import { memo, useState } from "react";
+import { memo, useRef, useState } from "react";
 import type { Message as MessageType } from "../types";
-import { formatTime, renderContent, splitSegments } from "../format";
+import { customEmojiUrl, formatTime, renderContent, splitSegments } from "../format";
 import { useStore } from "../store";
 import { api } from "../api";
 import Attachment from "./Attachment";
@@ -8,9 +8,10 @@ import LinkPreview from "./LinkPreview";
 import HtmlWidget from "./HtmlWidget";
 import CodeBlock from "./CodeBlock";
 import Avatar from "./Avatar";
+import EmojiPicker from "./EmojiPicker";
 import { SmilePlus, Pencil, Trash2, Check, X, Reply, CornerUpRight, Pin, Link2 } from "lucide-react";
 
-const QUICK_EMOJI = ["👍", "❤️", "😂", "🎉", "🚀", "👀", "✅", "🔥"];
+const CUSTOM_RE = /^:([a-z0-9_+-]+):$/;
 
 function MessageRow({
   message,
@@ -21,10 +22,14 @@ function MessageRow({
 }) {
   const user = useStore((s) => s.user);
   const setReplyTarget = useStore((s) => s.setReplyTarget);
+  // Subscribed so rows re-render when the room's custom emoji set changes
+  // (pills and inline :name: images resolve through it).
+  useStore((s) => s.emojis);
   const [picker, setPicker] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
   const [linked, setLinked] = useState(false);
+  const reactBtn = useRef<HTMLButtonElement>(null);
 
   if (message.kind === "system") {
     // Conversation dividers stay a quiet line; channel announcements (new
@@ -107,6 +112,7 @@ function MessageRow({
       <div className={`msg-actions absolute right-3 top-0 z-10 ${isLocal ? "!hidden" : ""} -translate-y-1/2 items-center gap-0.5 rounded-lg border border-[var(--c-border)] bg-[var(--c-elevated)] p-0.5 shadow-lg`}>
         <div className="relative">
           <button
+            ref={reactBtn}
             className="grid h-7 w-7 place-items-center rounded text-[var(--c-muted)] hover:bg-[var(--c-surface-2)] hover:text-[var(--c-text)]"
             onClick={() => setPicker((v) => !v)}
             title="React"
@@ -114,17 +120,11 @@ function MessageRow({
             <SmilePlus size={15} />
           </button>
           {picker && (
-            <div className="absolute right-0 top-8 z-20 flex gap-1 rounded-lg border border-[var(--c-border)] bg-[var(--c-elevated)] p-1.5 shadow-xl fade-in">
-              {QUICK_EMOJI.map((e) => (
-                <button
-                  key={e}
-                  className="rounded p-1 text-lg hover:bg-[var(--c-surface-2)]"
-                  onClick={() => react(e)}
-                >
-                  {e}
-                </button>
-              ))}
-            </div>
+            <EmojiPicker
+              anchor={reactBtn.current}
+              onClose={() => setPicker(false)}
+              onPick={(p) => react(p.native ?? `:${p.custom}:`)}
+            />
           )}
         </div>
         <button
@@ -282,18 +282,23 @@ function MessageRow({
           <div className="mt-1.5 flex flex-wrap gap-1">
             {message.reactions.map((r) => {
               const mineReacted = !!user && r.users.includes(user.name);
+              const customUrl = customEmojiUrl(r.emoji.match(CUSTOM_RE)?.[1] ?? "");
               return (
                 <button
                   key={r.emoji}
                   onClick={() => react(r.emoji)}
-                  title={r.users.join(", ")}
+                  title={`${r.users.join(", ")}${customUrl ? ` — ${r.emoji}` : ""}`}
                   className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition ${
                     mineReacted
                       ? "border-[var(--c-accent)] bg-[var(--c-accent-soft)]"
                       : "border-[var(--c-border)] bg-[var(--c-elevated)] hover:border-[var(--c-accent)]"
                   }`}
                 >
-                  <span>{r.emoji}</span>
+                  {customUrl ? (
+                    <img src={customUrl} alt={r.emoji} className="h-4 w-4 object-contain" />
+                  ) : (
+                    <span>{r.emoji}</span>
+                  )}
                   <span className="text-[var(--c-muted)]">{r.count}</span>
                 </button>
               );
